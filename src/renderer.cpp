@@ -34,20 +34,6 @@ void Renderer::shutdown() {
     SDL_Quit();
 }
 
-void Renderer::draw_filled_circle(float cx, float cy, float r) {
-    // Scanline fill
-    int ir = (int)r;
-    for (int dy = -ir; dy <= ir; ++dy) {
-        float half_w = std::sqrt(r * r - (float)(dy * dy));
-        SDL_FRect rect;
-        rect.x = cx - half_w;
-        rect.y = cy + dy;
-        rect.w = half_w * 2.0f;
-        rect.h = 1.0f;
-        SDL_RenderFillRect(renderer, &rect);
-    }
-}
-
 void Renderer::draw_thick_line(Vec2 a, Vec2 b, float thickness) {
     Vec2 d = b - a;
     float len = d.length();
@@ -81,11 +67,17 @@ void Renderer::draw(const World& world, float fps) {
         draw_thick_line(w.a, w.b, 3.0f);
     }
 
-    // Draw balls
-    SDL_SetRenderDrawColorFloat(renderer, 0.3f, 0.6f, 1.0f, 1.0f);
+    // Draw balls — batch all scanline rects into one draw call
+    circle_rects_.clear();
     for (auto& b : world.balls) {
-        draw_filled_circle(b.pos.x, b.pos.y, b.radius);
+        int ir = (int)b.radius;
+        for (int dy = -ir; dy <= ir; ++dy) {
+            float half_w = std::sqrt(b.radius * b.radius - (float)(dy * dy));
+            circle_rects_.push_back({b.pos.x - half_w, b.pos.y + dy, half_w * 2.0f, 1.0f});
+        }
     }
+    SDL_SetRenderDrawColorFloat(renderer, 0.3f, 0.6f, 1.0f, 1.0f);
+    SDL_RenderFillRects(renderer, circle_rects_.data(), (int)circle_rects_.size());
 
     // HUD
     char buf[128];

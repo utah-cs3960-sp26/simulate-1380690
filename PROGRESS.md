@@ -32,6 +32,14 @@
 ### Known Issues
 - None observed so far
 
+## Session 2 — Performance & Smoothness Fixes
+
+### Problems Fixed
+- **Sluggish simulation speed**: Fixed timestep accumulator was consuming fractional substeps incorrectly (using `std::min(accum, fixed_dt)` which ran partial-sized steps). Now uses proper accumulator pattern — only runs full-size fixed_dt steps.
+- **Choppy animation**: VSync was already enabled but physics was doing too much work per frame. Reduced solver iterations from 10 to 4 for better frame budget.
+- **Spatial hash performance**: Replaced `std::vector<std::vector<int>>` (heap allocs per cell per rebuild) with counting-sort-based flat arrays (`grid_counts_`, `grid_starts_`, `grid_data_`). Eliminates thousands of heap allocations per frame.
+- **Rendering bottleneck**: Replaced per-circle, per-scanline `SDL_RenderFillRect` calls (~13,000 individual draw calls) with a single batched `SDL_RenderFillRects` call using a pre-built rect array.
+
 ### Remaining
 - Extended stress testing (60+ seconds)
 - Visual verification of edge cases (high restitution, rapid resets)

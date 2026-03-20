@@ -36,7 +36,7 @@ struct World {
     std::vector<Wall> walls;
     float gravity = 500.0f;       // pixels/s^2
     float restitution = 0.5f;
-    int solver_iterations = 10;
+    int solver_iterations = 4;
     bool paused = false;
 
     // Spatial hash
@@ -56,13 +56,15 @@ struct World {
 
 private:
     int world_w = 0, world_h = 0;
+    float accumulator_ = 0.0f;
     void apply_gravity(float dt);
     void resolve_ball_wall(Ball& ball);
     void resolve_ball_ball(Ball& a, Ball& b);
     void build_spatial_hash();
 
-    // flat spatial hash grid
-    std::vector<std::vector<int>> grid_;
+    // Flat spatial hash grid (counting sort)
+    std::vector<int> grid_counts_;  // per-cell count
+    std::vector<int> grid_starts_;  // prefix sum (size = total_cells + 1)
+    std::vector<int> grid_data_;    // ball indices packed contiguously
     int grid_cols_ = 0, grid_rows_ = 0;
-    int cell_index(int cx, int cy) const { return cy * grid_cols_ + cx; }
 };

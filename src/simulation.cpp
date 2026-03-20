@@ -19,6 +19,7 @@ static Vec2 closest_point_on_segment(Vec2 p, Vec2 a, Vec2 b) {
 void World::init(int width, int height) {
     world_w = width;
     world_h = height;
+    accumulator_ = 0.0f;
     balls.clear();
     walls.clear();
 
@@ -152,9 +153,9 @@ void World::build_spatial_hash() {
     grid_cols_ = (int)(world_w / CELL_SIZE) + 1;
     grid_rows_ = (int)(world_h / CELL_SIZE) + 1;
     int total = grid_cols_ * grid_rows_;
-    grid_.resize(total);
-    for (auto& cell : grid_) cell.clear();
+    grid_counts_.assign(total, 0);
 
+    // Pass 1: count entries per cell
     for (int i = 0; i < (int)balls.size(); ++i) {
         auto& b = balls[i];
         int cx0 = std::max(0, (int)((b.pos.x - b.radius) / CELL_SIZE));
@@ -163,54 +164,89 @@ void World::build_spatial_hash() {
         int cy1 = std::min(grid_rows_ - 1, (int)((b.pos.y + b.radius) / CELL_SIZE));
         for (int cy = cy0; cy <= cy1; ++cy)
             for (int cx = cx0; cx <= cx1; ++cx)
-                grid_[cell_index(cx, cy)].push_back(i);
+                ++grid_counts_[cy * grid_cols_ + cx];
+    }
+
+    // Pass 2: prefix sum to compute starts
+    grid_starts_.resize(total + 1);
+    grid_starts_[0] = 0;
+    for (int i = 0; i < total; ++i)
+        grid_starts_[i + 1] = grid_starts_[i] + grid_counts_[i];
+
+    // Pass 3: scatter ball indices into packed array
+    int total_entries = grid_starts_[total];
+    grid_data_.resize(total_entries);
+    // Reuse grid_counts_ as insertion cursor (reset to 0)
+    std::fill(grid_counts_.begin(), grid_counts_.end(), 0);
+    for (int i = 0; i < (int)balls.size(); ++i) {
+        auto& b = balls[i];
+        int cx0 = std::max(0, (int)((b.pos.x - b.radius) / CELL_SIZE));
+        int cy0 = std::max(0, (int)((b.pos.y - b.radius) / CELL_SIZE));
+        int cx1 = std::min(grid_cols_ - 1, (int)((b.pos.x + b.radius) / CELL_SIZE));
+        int cy1 = std::min(grid_rows_ - 1, (int)((b.pos.y + b.radius) / CELL_SIZE));
+        for (int cy = cy0; cy <= cy1; ++cy)
+            for (int cx = cx0; cx <= cx1; ++cx) {
+                int idx = cy * grid_cols_ + cx;
+                grid_data_[grid_starts_[idx] + grid_counts_[idx]] = i;
+                ++grid_counts_[idx];
+            }
     }
 }
 
 void World::step(float dt) {
     if (paused) return;
 
-    // Fixed timestep substeps
     const float fixed_dt = 1.0f / 120.0f;
-    float accum = dt;
-    while (accum > 0.0f) {
-        float sub_dt = std::min(accum, fixed_dt);
-        accum -= sub_dt;
+    accumulator_ += dt;
 
-        apply_gravity(sub_dt);
+    while (accumulator_ >= fixed_dt) {
+        accumulator_ -= fixed_dt;
+
+        apply_gravity(fixed_dt);
 
         // Integrate positions
         for (auto& b : balls) {
-            b.pos += b.vel * sub_dt;
+            b.pos += b.vel * fixed_dt;
         }
 
-        // Solver iterations
+        // Solver iterations — rebuild spatial hash once, then iterate
         for (int iter = 0; iter < solver_iterations; ++iter) {
             // Ball-wall
             for (auto& b : balls) {
                 resolve_ball_wall(b);
             }
 
-            // Ball-ball with spatial hash
+            // Ball-ball with spatial hash (rebuild each iteration since positions shift)
             build_spatial_hash();
             for (int cy = 0; cy < grid_rows_; ++cy) {
                 for (int cx = 0; cx < grid_cols_; ++cx) {
-                    auto& cell = grid_[cell_index(cx, cy)];
+                    int cell_start = grid_starts_[cy * grid_cols_ + cx];
+                    int cell_count = grid_starts_[cy * grid_cols_ + cx + 1] - cell_start;
+                    if (cell_count == 0) continue;
+                    int* cell_data = &grid_data_[cell_start];
+
                     // Check within cell
-                    for (int i = 0; i < (int)cell.size(); ++i) {
-                        for (int j = i + 1; j < (int)cell.size(); ++j) {
-                            resolve_ball_ball(balls[cell[i]], balls[cell[j]]);
+                    for (int i = 0; i < cell_count; ++i) {
+                        for (int j = i + 1; j < cell_count; ++j) {
+                            resolve_ball_ball(balls[cell_data[i]], balls[cell_data[j]]);
                         }
                     }
                     // Check neighbor cells (right, below, below-right, below-left)
-                    int neighbors[][2] = {{1,0},{0,1},{1,1},{-1,1}};
+                    static constexpr int neighbors[][2] = {{1,0},{0,1},{1,1},{-1,1}};
                     for (auto& nb : neighbors) {
                         int nx = cx + nb[0], ny = cy + nb[1];
                         if (nx < 0 || nx >= grid_cols_ || ny < 0 || ny >= grid_rows_) continue;
-                        auto& ncell = grid_[cell_index(nx, ny)];
-                        for (int i : cell) {
-                            for (int j : ncell) {
-                                if (i < j) resolve_ball_ball(balls[i], balls[j]);
+                        int nstart = grid_starts_[ny * grid_cols_ + nx];
+                        int ncount = grid_starts_[ny * grid_cols_ + nx + 1] - nstart;
+                        if (ncount == 0) continue;
+                        int* ncell_data = &grid_data_[nstart];
+                        for (int i = 0; i < cell_count; ++i) {
+                            for (int j = 0; j < ncount; ++j) {
+                                int ai = cell_data[i], bi = ncell_data[j];
+                                if (ai < bi)
+                                    resolve_ball_ball(balls[ai], balls[bi]);
+                                else if (bi < ai)
+                                    resolve_ball_ball(balls[bi], balls[ai]);
                             }
                         }
                     }
