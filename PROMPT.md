@@ -109,3 +109,14 @@ Build a 2D physics simulator using C++ and SDL3 that simulates ~1000 circular ba
 - If physics is unstable, reduce timestep or increase solver iterations before trying anything else
 - If performance is bad, implement spatial hashing first before any other optimization
 - Always prefer correctness over performance — get it stable, then get it fast
+
+## Current Issues (fix these first)
+- Simulation is running too slow — balls move sluggishly, not at real-time speed
+- Animation is not smooth — appears choppy/laggy
+- Performance needs improvement for 1000 balls
+
+## Performance Fixes Needed
+- Verify fixed timestep is correct (should feel like real gravity, balls should fall fast)
+- Implement or verify spatial hash grid for broad-phase collision detection
+- Target 60 fps — check that the render loop is not bottlenecked
+- Make sure delta time scaling is correct so physics speed matches real time
