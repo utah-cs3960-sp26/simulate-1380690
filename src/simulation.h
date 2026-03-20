@@ -21,6 +21,7 @@ struct Vec2 {
 
 struct Ball {
     Vec2 pos;
+    Vec2 prev_pos;
     Vec2 vel;
     float radius;
     float mass;
@@ -34,10 +35,12 @@ struct Wall {
 struct World {
     std::vector<Ball> balls;
     std::vector<Wall> walls;
-    float gravity = 500.0f;       // pixels/s^2
+    float gravity = 1200.0f;      // pixels/s^2
     float restitution = 0.5f;
-    int solver_iterations = 4;
+    int solver_iterations = 2;
     bool paused = false;
+
+    float interpolation_alpha() const { return accumulator_ / fixed_dt_; }
 
     // Spatial hash
     static constexpr float CELL_SIZE = 20.0f;
@@ -55,16 +58,21 @@ struct World {
     void step(float dt);
 
 private:
+    static constexpr float fixed_dt_ = 1.0f / 120.0f;
+    static constexpr int max_substeps_ = 4;
+
     int world_w = 0, world_h = 0;
     float accumulator_ = 0.0f;
-    void apply_gravity(float dt);
     void resolve_ball_wall(Ball& ball);
     void resolve_ball_ball(Ball& a, Ball& b);
-    void build_spatial_hash();
+    void build_broadphase();
 
-    // Flat spatial hash grid (counting sort)
-    std::vector<int> grid_counts_;  // per-cell count
-    std::vector<int> grid_starts_;  // prefix sum (size = total_cells + 1)
-    std::vector<int> grid_data_;    // ball indices packed contiguously
+    // Flat spatial hash grid (counting sort, center-cell only)
+    std::vector<int> grid_counts_;
+    std::vector<int> grid_starts_;
+    std::vector<int> grid_data_;
     int grid_cols_ = 0, grid_rows_ = 0;
+
+    // Cached collision pairs from broad phase
+    std::vector<std::pair<int,int>> pairs_;
 };

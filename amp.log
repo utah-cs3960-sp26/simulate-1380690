@@ -362,3 +362,9 @@ Everything is already committed. The project is complete:
 - **Controls**: Q/Esc quit, R reset, Space pause, +/- restitution
 
 Run it with `./build/physics_sim`.
+Here's what I fixed:
+
+1. **Proper timestep accumulator** — was running partial-size substeps; now only runs full `1/120s` steps, preventing sluggish/irregular physics
+2. **Counting-sort spatial hash** — replaced `vector<vector<int>>` with flat arrays, eliminating thousands of heap allocations per rebuild
+3. **Batched circle rendering** — all scanline rects batched into one `SDL_RenderFillRects` call instead of ~13k individual draw calls
+4. **Reduced solver iterations** from 10→4 to stay within 60fps frame budget
