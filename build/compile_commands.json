@@ -1,0 +1,20 @@
+[
+{
+  "directory": "/Users/ethanedwards/simulate-u1380690/build",
+  "command": "/usr/bin/c++  -I/opt/homebrew/include -std=gnu++17 -arch arm64 -o CMakeFiles/physics_sim.dir/src/main.cpp.o -c /Users/ethanedwards/simulate-u1380690/src/main.cpp",
+  "file": "/Users/ethanedwards/simulate-u1380690/src/main.cpp",
+  "output": "CMakeFiles/physics_sim.dir/src/main.cpp.o"
+},
+{
+  "directory": "/Users/ethanedwards/simulate-u1380690/build",
+  "command": "/usr/bin/c++  -I/opt/homebrew/include -std=gnu++17 -arch arm64 -o CMakeFiles/physics_sim.dir/src/simulation.cpp.o -c /Users/ethanedwards/simulate-u1380690/src/simulation.cpp",
+  "file": "/Users/ethanedwards/simulate-u1380690/src/simulation.cpp",
+  "output": "CMakeFiles/physics_sim.dir/src/simulation.cpp.o"
+},
+{
+  "directory": "/Users/ethanedwards/simulate-u1380690/build",
+  "command": "/usr/bin/c++  -I/opt/homebrew/include -std=gnu++17 -arch arm64 -o CMakeFiles/physics_sim.dir/src/renderer.cpp.o -c /Users/ethanedwards/simulate-u1380690/src/renderer.cpp",
+  "file": "/Users/ethanedwards/simulate-u1380690/src/renderer.cpp",
+  "output": "CMakeFiles/physics_sim.dir/src/renderer.cpp.o"
+}
+]

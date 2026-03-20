@@ -1,0 +1,1 @@
+/usr/bin/c++  -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/physics_sim.dir/src/main.cpp.o CMakeFiles/physics_sim.dir/src/simulation.cpp.o CMakeFiles/physics_sim.dir/src/renderer.cpp.o -o physics_sim  -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3.0.dylib

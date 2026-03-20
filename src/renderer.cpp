@@ -1,0 +1,108 @@
+#include "renderer.h"
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+
+bool Renderer::init(int width, int height) {
+    width_ = width;
+    height_ = height;
+
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        SDL_Log("SDL_Init failed: %s", SDL_GetError());
+        return false;
+    }
+
+    window = SDL_CreateWindow("Physics Simulator", width, height, 0);
+    if (!window) {
+        SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
+        return false;
+    }
+
+    renderer = SDL_CreateRenderer(window, nullptr);
+    if (!renderer) {
+        SDL_Log("SDL_CreateRenderer failed: %s", SDL_GetError());
+        return false;
+    }
+
+    SDL_SetRenderVSync(renderer, 1);
+    return true;
+}
+
+void Renderer::shutdown() {
+    if (renderer) SDL_DestroyRenderer(renderer);
+    if (window) SDL_DestroyWindow(window);
+    SDL_Quit();
+}
+
+void Renderer::draw_filled_circle(float cx, float cy, float r) {
+    // Scanline fill
+    int ir = (int)r;
+    for (int dy = -ir; dy <= ir; ++dy) {
+        float half_w = std::sqrt(r * r - (float)(dy * dy));
+        SDL_FRect rect;
+        rect.x = cx - half_w;
+        rect.y = cy + dy;
+        rect.w = half_w * 2.0f;
+        rect.h = 1.0f;
+        SDL_RenderFillRect(renderer, &rect);
+    }
+}
+
+void Renderer::draw_thick_line(Vec2 a, Vec2 b, float thickness) {
+    Vec2 d = b - a;
+    float len = d.length();
+    if (len < 1e-6f) return;
+    Vec2 n = Vec2{-d.y, d.x} * (1.0f / len) * (thickness * 0.5f);
+
+    SDL_FPoint pts[4] = {
+        {a.x + n.x, a.y + n.y},
+        {a.x - n.x, a.y - n.y},
+        {b.x - n.x, b.y - n.y},
+        {b.x + n.x, b.y + n.y}
+    };
+    // Draw as two triangles
+    SDL_Vertex verts[6];
+    SDL_FColor color = {0.8f, 0.8f, 0.8f, 1.0f};
+    int indices[] = {0, 1, 2, 0, 2, 3};
+    for (int i = 0; i < 6; ++i) {
+        verts[i].position = pts[indices[i]];
+        verts[i].color = color;
+        verts[i].tex_coord = {0, 0};
+    }
+    SDL_RenderGeometry(renderer, nullptr, verts, 6, nullptr, 0);
+}
+
+void Renderer::draw(const World& world, float fps) {
+    SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255);
+    SDL_RenderClear(renderer);
+
+    // Draw walls
+    for (auto& w : world.walls) {
+        draw_thick_line(w.a, w.b, 3.0f);
+    }
+
+    // Draw balls
+    SDL_SetRenderDrawColorFloat(renderer, 0.3f, 0.6f, 1.0f, 1.0f);
+    for (auto& b : world.balls) {
+        draw_filled_circle(b.pos.x, b.pos.y, b.radius);
+    }
+
+    // HUD
+    char buf[128];
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
+    snprintf(buf, sizeof(buf), "FPS: %.0f", fps);
+    SDL_RenderDebugText(renderer, 10, 10, buf);
+
+    snprintf(buf, sizeof(buf), "Balls: %d", (int)world.balls.size());
+    SDL_RenderDebugText(renderer, 10, 26, buf);
+
+    snprintf(buf, sizeof(buf), "Restitution: %.2f", world.restitution);
+    SDL_RenderDebugText(renderer, 10, 42, buf);
+
+    if (world.paused) {
+        SDL_RenderDebugText(renderer, 10, 58, "PAUSED");
+    }
+
+    SDL_RenderPresent(renderer);
+}
