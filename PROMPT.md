@@ -1,112 +1,83 @@
-Physics Simulator - Amp Autonomous Build Prompt
-Project Goal
-Build a 2D physics simulator using C++ and SDL3 that simulates ~1000 circular balls inside a container made of fixed walls. Balls are influenced by gravity and collide with walls and each other using inelastic collisions with configurable restitution. The simulation must be stable and visually smooth — balls should fall, bounce, and eventually come to rest naturally.
-Tech Stack
+2D Physics Simulator
+Goal
+Build a 2D physics simulator in C++ using SDL3. ~1000 balls fall into a funnel/container, bounce around, and settle naturally. The final result should look satisfying and pleasant to watch.
+Requirements
 
-Language: C++17 or later
-Graphics/Window: SDL3 (brew install sdl3 if needed)
-Build system: CMake (brew install cmake if needed)
-Platform: macOS
+SDL3 + CMake on macOS (brew install sdl3 cmake)
+~1000 circular balls with gravity, ball-wall and ball-ball collisions
+Inelastic collisions with configurable restitution (default 0.5)
+Balls must eventually come to a COMPLETE stop — no jitter, no vibration, no infinite motion
+60 fps target, 30 fps minimum
 
-What "Working" Looks Like
+Scene Layout
+Create a visually interesting container using angled wall segments:
 
-~1000 balls spawn above the floor inside a container
-Balls fall under gravity and bounce off walls and each other
-Balls gradually lose energy and come to a complete stop at the bottom
-No balls escape the container, tunnel through walls, or spin in endless loops
-Runs at 30+ fps
-Pressing +/- changes restitution and visibly changes how bouncy the balls are
+A funnel shape at the top (two angled walls forming a V) that feeds into a rectangular box at the bottom
+The box should be wide enough to hold all 1000 balls when settled
+Balls spawn above the funnel mouth in a grid, fall through the funnel, and pile up in the box
 
-Current State — THE SIMULATION IS BROKEN
-The current implementation has balls forming a vortex/tunnel in the middle that never stops. This is fundamentally wrong. Start over with a clean, simple implementation rather than trying to patch the existing broken code. Delete src/ and start fresh if needed.
-Simple, Correct Implementation Approach
-Do NOT over-engineer this. Use this straightforward approach:
-Physics Loop (per frame)
+Physics — implement exactly this way
 
-Apply gravity to all ball velocities: vy += gravity * dt
-Move all balls: x += vx * dt, y += vy * dt
-Resolve ball-wall collisions (push ball out, reflect velocity * restitution)
-Resolve ball-ball collisions (push apart, exchange momentum * restitution)
-Repeat steps 3-4 for 10 iterations to handle stacking
-If a ball's speed < 2.0, set its velocity to zero (sleep it)
+Fixed timestep: 1/120s. Run multiple substeps per frame to catch up if needed.
+Each substep:
+a. Apply gravity: vy += 980 * dt (use pixels, 980 px/s² feels realistic)
+b. Integrate position: x += vx*dt, y += vy*dt
+c. Run 10 iterations of collision resolution:
+
+Ball vs wall segments: project ball onto wall, if penetrating push out along normal and reflect velocity component along normal multiplied by restitution. If relative normal velocity < 1.0, use restitution=0 for that contact.
+Ball vs ball: if overlapping, push both apart equally, apply impulse with restitution. If relative normal velocity < 1.0, use restitution=0 for that contact.
+
+
+After all substeps: if ball speed < 5.0 px/s, set velocity to exactly zero (sleep). Wake ball if hit by another.
+Apply damping each substep: multiply velocity by 0.995
 
 Restitution
 
-Single global value, default 0.5
-Applied to velocity after collision: v_new = -v * restitution
-Changeable at runtime with +/- keys
-
-Container
-
-Simple rectangle: left wall, right wall, floor, ceiling
-Hardcode the wall positions — no need for a complex wall system
-
-Ball Setup
-
-Place ~1000 balls in a grid pattern near the top of the container
-Radius: 5px, slight variation okay
-No initial velocity
-
-Stability Rules
-
-After collision response, always push balls apart so they don't overlap
-If relative collision velocity < 1.0, use restitution = 0 for that contact
-Apply 0.99 velocity damping per frame
-
-Performance
-
-Use a spatial hash grid for ball-ball broad phase (required for 1000 balls at 30fps)
-Fixed timestep of 1/120s, multiple substeps per render frame if needed
-
-Files
-
-CMakeLists.txt
-src/main.cpp — SDL3 init, main loop, input handling
-src/simulation.h/.cpp — physics
-src/renderer.h/.cpp — drawing
-README.md — how to build and run
-PROGRESS.md — what was done each session
+Global value, default 0.5, range [0.0, 1.0]
++ key increases by 0.05, - decreases by 0.05
+Lower restitution = faster settling, same final pile size either way
 
 Controls
 
-Q / Escape: quit
+Q/Escape: quit
 R: reset scene
-+ / -: restitution up/down by 0.05
++/-: change restitution
 Space: pause/unpause
 S: save ball positions to final_positions.csv
 
+Rendering
+
+Black background
+White or gray wall segments, drawn thick (3px)
+Balls drawn as filled circles, default color white or random pastel
+HUD showing FPS, ball count, restitution value
+Window: 1280x720
+
+Week 11: CSV + Image Reveal
+After physics is stable, add:
+CSV scene loading
+
+./physics_sim --scene file.csv loads ball starting positions and colors
+CSV format: x,y,r,color_r,color_g,color_b (one ball per row)
+S key saves current positions as final_positions.csv in same format
+Without --scene, use default random scene
+
+Color assignment tool: tools/assign_colors.py
+Usage: python tools/assign_colors.py initial.csv final_positions.csv image.png output.csv
+
+For each ball, find where it ended up in final_positions.csv
+Sample the image color at that pixel location (scale image to window size)
+Write output.csv with same starting positions but image-sampled colors
+Requires Pillow: pip install pillow
+
+Full workflow
+
+Run sim with default scene → press S → get final_positions.csv
+Run assign_colors.py with your image → get output.csv
+Run sim with output.csv → watch image appear as balls settle
+
 Commit Policy
 
-Commit after EVERY successful compile with git add -A && git commit -m "description"
-Small frequent commits — do not batch changes
-Never commit broken/non-compiling code
-
-Testing After Every Change
-cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(sysctl -n hw.logicalcpu)
-./physics_sim
-Verify: balls fall, bounce, and settle. No vortex. No infinite motion.
-
-Week 9: Image Reveal Feature (implement AFTER physics is stable)
-Goal
-Balls bounce around randomly, then settle to reveal an image. Each ball gets colored based on where it ends up in the final pile.
-Workflow
-
-User runs simulator with default colors → presses S → saves final_positions.csv
-User runs: python tools/assign_colors.py scene.csv final_positions.csv image.png colored.csv
-User runs simulator with ./physics_sim --scene colored.csv → image appears when balls settle
-
-CSV Format
-One row per ball: x, y, r, color_r, color_g, color_b
-assign_colors.py
-
-Input: initial scene CSV, final positions CSV, target image (PNG/JPG)
-For each ball: look up its final position, sample image color at that pixel, assign to ball
-Output: new CSV with same starting positions but image-sampled colors
-Use Python + Pillow (pip install pillow)
-Scale image to simulator window size if dimensions differ
-
-Simulator Changes
-
-Accept --scene filename.csv command line arg to load a scene
-Fall back to default random scene if no arg given
-S key saves current positions to final_positions.csv
+git add -A && git commit -m "message" after EVERY successful compile
+One change per commit, descriptive messages
+Never commit broken code
