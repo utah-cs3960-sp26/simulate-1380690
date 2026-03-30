@@ -22,12 +22,14 @@ struct Vec2 {
 
 struct Ball {
     Vec2 pos;
+    Vec2 prev_pos;
     Vec2 vel;
     float radius;
     float mass;
     uint8_t color_r = 77, color_g = 153, color_b = 255; // default blue
     bool sleeping = false;
     int sleep_counter = 0;
+    int contact_count = 0;
 };
 
 struct Wall {

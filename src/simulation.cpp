@@ -19,10 +19,11 @@ static Vec2 closest_point_on_segment(Vec2 p, Vec2 a, Vec2 b) {
     return a + ab * t;
 }
 
-static constexpr float SLEEP_SPEED_THRESHOLD = 8.0f;
-static constexpr int SLEEP_FRAMES_REQUIRED = 60;
-static constexpr float DAMPING = 0.998f;
+static constexpr float SLEEP_SPEED_THRESHOLD = 3.0f;
+static constexpr int SLEEP_FRAMES_REQUIRED = 120;
+static constexpr float DAMPING = 0.9995f;
 static constexpr float RESTITUTION_CUTOFF_VEL = 2.0f;
+static constexpr float WALL_FRICTION = 0.03f;
 
 void World::init(int width, int height) {
     world_w = width;
@@ -58,28 +59,35 @@ void World::init(int width, int height) {
         w.normal = (n1.dot(to_center) > n2.dot(to_center)) ? n1 : n2;
     }
 
-    // Spawn ~1000 balls in a grid above the funnel
+    // Spawn ~1000 balls ABOVE the funnel only
     std::mt19937 rng(42);
     std::uniform_real_distribution<float> radius_dist(4.0f, 6.0f);
-    std::uniform_real_distribution<float> jitter(-0.5f, 0.5f);
+    std::uniform_real_distribution<float> jitter(-0.25f, 0.25f);
     std::uniform_int_distribution<int> color_dist(80, 255);
 
-    float spawn_left = left + 20;
-    float spawn_right = right - 20;
-    float spacing = 12.0f;
-    int cols = (int)((spawn_right - spawn_left) / spacing);
+    const float max_r = 6.0f;
+    const float spacing = 2.0f * max_r + 2.0f; // 14px, no initial overlap
+    float spawn_top = top + max_r + 4.0f;
+    float funnel_highest = funnel_top - 80.0f; // highest point of funnel walls
+    float spawn_bottom = funnel_highest - max_r - 4.0f;
+    float spawn_left = left + max_r + 4.0f;
+    float spawn_right = right - max_r - 4.0f;
+
+    int cols = std::max(1, (int)((spawn_right - spawn_left) / spacing));
+    int max_rows = std::max(1, (int)((spawn_bottom - spawn_top) / spacing));
+    int target = std::min(1000, cols * max_rows);
 
     int count = 0;
-    int target = 1000;
-    for (int row = 0; count < target; ++row) {
+    for (int row = 0; row < max_rows && count < target; ++row) {
         for (int col = 0; col < cols && count < target; ++col) {
             float r = radius_dist(rng);
             float px = spawn_left + col * spacing + jitter(rng);
-            float py = top + 20 + row * spacing + jitter(rng);
-            if (py > bottom - 20) break;
+            float py = spawn_top + row * spacing + jitter(rng);
+
             Ball b;
             b.pos = {px, py};
-            b.vel = {jitter(rng) * 2.0f, 0.0f};
+            b.prev_pos = b.pos;
+            b.vel = {jitter(rng) * 1.0f, 0.0f};
             b.radius = r;
             b.mass = r * r;
             b.color_r = (uint8_t)color_dist(rng);
@@ -88,7 +96,6 @@ void World::init(int width, int height) {
             balls.push_back(b);
             ++count;
         }
-        if (top + 20 + (row + 1) * spacing > bottom - 20) break;
     }
 }
 
@@ -144,6 +151,7 @@ void World::init_from_csv(const std::string& filename, int width, int height) {
         Ball b;
         b.pos.x = values[0];
         b.pos.y = values[1];
+        b.prev_pos = b.pos;
         b.radius = (values.size() >= 3) ? values[2] : 5.0f;
         b.mass = b.radius * b.radius;
         b.vel = {0, 0};
@@ -176,52 +184,70 @@ void World::apply_gravity(float dt) {
 }
 
 void World::resolve_ball_wall(Ball& ball) {
-    for (auto& w : walls) {
-        Vec2 cp = closest_point_on_segment(ball.pos, w.a, w.b);
+    for (const auto& w : walls) {
+        Vec2 edge = w.b - w.a;
+        float edge_len2 = edge.length2();
+        if (edge_len2 < 1e-8f) continue;
+
+        // Closest point on segment to current position
+        float t = clampf((ball.pos - w.a).dot(edge) / edge_len2, 0.0f, 1.0f);
+        Vec2 cp = w.a + edge * t;
+
+        // Face normal from segment
+        Vec2 face_n = Vec2{-edge.y, edge.x}.normalized();
+
+        // Orient normal so it points toward the side the ball came from
+        if ((ball.prev_pos - w.a).dot(face_n) < 0.0f) {
+            face_n = face_n * -1.0f;
+        }
+
+        // Use face normal on segment interior, radial normal near endpoints
         Vec2 diff = ball.pos - cp;
-        float dist = diff.length();
-        if (dist < ball.radius && dist > 1e-6f) {
-            Vec2 n = diff.normalized();
-            float penetration = ball.radius - dist;
+        float diff_len = diff.length();
+        Vec2 n;
+        if (t > 1e-3f && t < 1.0f - 1e-3f) {
+            n = face_n;
+        } else {
+            n = (diff_len > 1e-6f) ? diff * (1.0f / diff_len) : face_n;
+        }
 
-            // Positional correction with slop
-            float slop = 0.3f;
-            float correction = std::max(penetration - slop, 0.0f) + std::min(penetration, slop) * 0.2f;
-            ball.pos += n * correction;
+        float curr_sep = (ball.pos - cp).dot(n);
 
-            // Velocity reflection
-            float vn = ball.vel.dot(n);
-            if (vn < 0) {
-                if (ball.sleeping) {
-                    // Only wake on significant incoming velocity (not gravity settling)
-                    if (std::abs(vn) > 5.0f) {
-                        ball.sleeping = false;
-                        ball.sleep_counter = 0;
-                    } else {
-                        // Just zero out the penetrating velocity component
-                        ball.vel -= n * vn;
-                        continue;
-                    }
-                }
-                float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
-                ball.vel -= n * (vn * (1.0f + e));
+        // Swept crossing check
+        Vec2 prev_cp = closest_point_on_segment(ball.prev_pos, w.a, w.b);
+        float prev_sep = (ball.prev_pos - prev_cp).dot(n);
 
-                // Tangential friction to help settling
-                Vec2 tangent_vel = ball.vel - n * ball.vel.dot(n);
-                float friction = 0.3f;
-                ball.vel -= tangent_vel * friction;
-            }
-        } else if (dist < 1e-6f) {
-            ball.pos += w.normal * ball.radius;
-            float vn = ball.vel.dot(w.normal);
-            if (vn < 0) {
-                if (ball.sleeping) {
-                    ball.vel -= w.normal * vn;
+        bool overlapping = curr_sep < ball.radius;
+        bool crossed = prev_sep >= ball.radius * 0.5f && curr_sep < ball.radius * 0.5f;
+
+        if (!overlapping && !crossed) continue;
+
+        ball.contact_count++;
+
+        float penetration = ball.radius - curr_sep;
+        if (crossed && penetration < 0.0f) penetration = ball.radius;
+
+        // Full positional correction
+        ball.pos += n * (penetration + 0.01f);
+
+        // Velocity reflection
+        float vn = ball.vel.dot(n);
+        if (vn < 0.0f) {
+            if (ball.sleeping) {
+                if (std::abs(vn) > 5.0f) {
+                    ball.sleeping = false;
+                    ball.sleep_counter = 0;
+                } else {
+                    ball.vel -= n * vn;
                     continue;
                 }
-                float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
-                ball.vel -= w.normal * (vn * (1.0f + e));
             }
+            float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
+            ball.vel -= n * (vn * (1.0f + e));
+
+            // Small tangential friction
+            Vec2 tangent_vel = ball.vel - n * ball.vel.dot(n);
+            ball.vel -= tangent_vel * WALL_FRICTION;
         }
     }
 }
@@ -243,17 +269,22 @@ void World::resolve_ball_ball(Ball& a, Ball& b) {
                 a.pos -= n * (correction * (b.mass / total_mass));
                 b.pos += n * (correction * (a.mass / total_mass));
             }
+            a.contact_count++;
+            b.contact_count++;
             return;
         }
 
-        // Positional correction with slop
-        float slop = 0.5f;
-        float correction = std::max(penetration - slop, 0.0f) * 0.4f;
+        // Positional correction with small slop
+        float slop = 0.3f;
+        float correction = std::max(penetration - slop, 0.0f) * 0.6f;
         if (correction > 0.0f) {
             float total_mass = a.mass + b.mass;
             if (!a.sleeping) a.pos -= n * (correction * (b.mass / total_mass));
             if (!b.sleeping) b.pos += n * (correction * (a.mass / total_mass));
         }
+
+        a.contact_count++;
+        b.contact_count++;
 
         // Velocity response
         float rel_vn = (b.vel - a.vel).dot(n);
@@ -316,9 +347,6 @@ void World::build_spatial_hash() {
 void World::collect_pairs() {
     pairs_.clear();
 
-    // Use a generation-based dedup: encode pair as int64 and use a flat set
-    // For 1000 balls, using sorted pair as key
-    // Simple approach: iterate grid, collect candidate pairs, sort & unique
     for (int cy = 0; cy < grid_rows_; ++cy) {
         for (int cx = 0; cx < grid_cols_; ++cx) {
             int cell_idx = cy * grid_cols_ + cx;
@@ -369,7 +397,7 @@ void World::step(float dt) {
     const float fixed_dt = 1.0f / 120.0f;
     accumulator_ += dt;
 
-    // Cap accumulator to prevent spiral of death (max 8 substeps per frame)
+    // Cap accumulator to prevent spiral of death
     float max_accum = fixed_dt * 8.0f;
     if (accumulator_ > max_accum) accumulator_ = max_accum;
 
@@ -377,6 +405,12 @@ void World::step(float dt) {
         accumulator_ -= fixed_dt;
 
         apply_gravity(fixed_dt);
+
+        // Save prev positions and reset contact counts
+        for (auto& b : balls) {
+            b.prev_pos = b.pos;
+            b.contact_count = 0;
+        }
 
         // Integrate positions (skip sleeping balls)
         for (auto& b : balls) {
@@ -400,17 +434,21 @@ void World::step(float dt) {
             }
         }
 
-        // Sleep system: track how long balls have been slow
+        // Sleep system: contact-based — only sleep if resting on something
         for (auto& b : balls) {
-            if (b.sleeping) continue;
             float speed = b.vel.length();
-            if (speed < SLEEP_SPEED_THRESHOLD) {
-                b.sleep_counter++;
-                // Progressive damping as ball approaches sleep
-                float progress = (float)b.sleep_counter / (float)SLEEP_FRAMES_REQUIRED;
-                float extra_damp = 1.0f - progress * 0.05f; // ramps from 1.0 to 0.95
-                b.vel = b.vel * extra_damp;
 
+            if (b.sleeping) {
+                // Wake up if unsupported (fell off something)
+                if (b.contact_count == 0) {
+                    b.sleeping = false;
+                    b.sleep_counter = 0;
+                }
+                continue;
+            }
+
+            if (b.contact_count > 0 && speed < SLEEP_SPEED_THRESHOLD) {
+                b.sleep_counter++;
                 if (b.sleep_counter >= SLEEP_FRAMES_REQUIRED) {
                     b.sleeping = true;
                     b.vel = {0, 0};
