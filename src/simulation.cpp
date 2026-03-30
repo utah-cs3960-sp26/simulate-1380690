@@ -2,6 +2,9 @@
 #include <algorithm>
 #include <random>
 #include <cmath>
+#include <fstream>
+#include <sstream>
+#include <cstdio>
 
 static float clampf(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
@@ -16,6 +19,11 @@ static Vec2 closest_point_on_segment(Vec2 p, Vec2 a, Vec2 b) {
     return a + ab * t;
 }
 
+static constexpr float SLEEP_SPEED_THRESHOLD = 5.0f;
+static constexpr int SLEEP_FRAMES_REQUIRED = 30;
+static constexpr float DAMPING = 0.999f;
+static constexpr float RESTITUTION_CUTOFF_VEL = 1.0f;
+
 void World::init(int width, int height) {
     world_w = width;
     world_h = height;
@@ -28,29 +36,23 @@ void World::init(int width, int height) {
     float top = margin, bottom = height - margin;
 
     // 4 container walls — normals point inward
-    // Bottom
     walls.push_back({{left, bottom}, {right, bottom}, {0, -1}});
-    // Top
     walls.push_back({{left, top}, {right, top}, {0, 1}});
-    // Left
     walls.push_back({{left, top}, {left, bottom}, {1, 0}});
-    // Right
     walls.push_back({{right, top}, {right, bottom}, {-1, 0}});
 
     // Funnel: two angled walls in the upper-middle area
     float cx = width / 2.0f;
     float funnel_top = height * 0.35f;
     float funnel_gap = 60.0f;
-    walls.push_back({{left + 40, funnel_top - 80}, {cx - funnel_gap, funnel_top}, {0.4f, -0.916f}}); // left funnel
-    walls.push_back({{right - 40, funnel_top - 80}, {cx + funnel_gap, funnel_top}, {-0.4f, -0.916f}}); // right funnel
+    walls.push_back({{left + 40, funnel_top - 80}, {cx - funnel_gap, funnel_top}, {}});
+    walls.push_back({{right - 40, funnel_top - 80}, {cx + funnel_gap, funnel_top}, {}});
 
-    // Recompute wall normals properly (perpendicular to wall, pointing "up" or "inward")
+    // Recompute wall normals (perpendicular to wall, pointing toward screen center)
     for (auto& w : walls) {
         Vec2 edge = w.b - w.a;
-        // Two candidate normals
         Vec2 n1 = Vec2{-edge.y, edge.x}.normalized();
         Vec2 n2 = Vec2{edge.y, -edge.x}.normalized();
-        // Pick the one pointing toward center of screen
         Vec2 mid = (w.a + w.b) * 0.5f;
         Vec2 to_center = Vec2{(float)width / 2, (float)height / 2} - mid;
         w.normal = (n1.dot(to_center) > n2.dot(to_center)) ? n1 : n2;
@@ -60,6 +62,7 @@ void World::init(int width, int height) {
     std::mt19937 rng(42);
     std::uniform_real_distribution<float> radius_dist(4.0f, 7.0f);
     std::uniform_real_distribution<float> jitter(-0.5f, 0.5f);
+    std::uniform_int_distribution<int> color_dist(80, 255);
 
     float spawn_left = left + 20;
     float spawn_right = right - 20;
@@ -78,7 +81,10 @@ void World::init(int width, int height) {
             b.pos = {px, py};
             b.vel = {jitter(rng) * 2.0f, 0.0f};
             b.radius = r;
-            b.mass = r * r; // proportional to area
+            b.mass = r * r;
+            b.color_r = (uint8_t)color_dist(rng);
+            b.color_g = (uint8_t)color_dist(rng);
+            b.color_b = (uint8_t)color_dist(rng);
             balls.push_back(b);
             ++count;
         }
@@ -86,8 +92,85 @@ void World::init(int width, int height) {
     }
 }
 
+void World::init_from_csv(const std::string& filename, int width, int height) {
+    world_w = width;
+    world_h = height;
+    accumulator_ = 0.0f;
+    balls.clear();
+    walls.clear();
+
+    float margin = 30.0f;
+    float left = margin, right = width - margin;
+    float top = margin, bottom = height - margin;
+
+    walls.push_back({{left, bottom}, {right, bottom}, {0, -1}});
+    walls.push_back({{left, top}, {right, top}, {0, 1}});
+    walls.push_back({{left, top}, {left, bottom}, {1, 0}});
+    walls.push_back({{right, top}, {right, bottom}, {-1, 0}});
+
+    float cx = width / 2.0f;
+    float funnel_top = height * 0.35f;
+    float funnel_gap = 60.0f;
+    walls.push_back({{left + 40, funnel_top - 80}, {cx - funnel_gap, funnel_top}, {}});
+    walls.push_back({{right - 40, funnel_top - 80}, {cx + funnel_gap, funnel_top}, {}});
+
+    for (auto& w : walls) {
+        Vec2 edge = w.b - w.a;
+        Vec2 n1 = Vec2{-edge.y, edge.x}.normalized();
+        Vec2 n2 = Vec2{edge.y, -edge.x}.normalized();
+        Vec2 mid = (w.a + w.b) * 0.5f;
+        Vec2 to_center = Vec2{(float)width / 2, (float)height / 2} - mid;
+        w.normal = (n1.dot(to_center) > n2.dot(to_center)) ? n1 : n2;
+    }
+
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        fprintf(stderr, "Failed to open CSV: %s, falling back to default scene\n", filename.c_str());
+        init(width, height);
+        return;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        std::istringstream ss(line);
+        std::string token;
+        std::vector<float> values;
+        while (std::getline(ss, token, ',')) {
+            values.push_back(std::stof(token));
+        }
+        if (values.size() < 2) continue;
+
+        Ball b;
+        b.pos.x = values[0];
+        b.pos.y = values[1];
+        b.radius = (values.size() >= 3) ? values[2] : 5.0f;
+        b.mass = b.radius * b.radius;
+        b.vel = {0, 0};
+        b.color_r = (values.size() >= 4) ? (uint8_t)values[3] : 77;
+        b.color_g = (values.size() >= 5) ? (uint8_t)values[4] : 153;
+        b.color_b = (values.size() >= 6) ? (uint8_t)values[5] : 255;
+        balls.push_back(b);
+    }
+    fprintf(stderr, "Loaded %d balls from CSV: %s\n", (int)balls.size(), filename.c_str());
+}
+
+void World::save_csv(const std::string& filename) const {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        fprintf(stderr, "Failed to save CSV: %s\n", filename.c_str());
+        return;
+    }
+    for (auto& b : balls) {
+        file << b.pos.x << "," << b.pos.y << "," << b.radius << ","
+             << (int)b.color_r << "," << (int)b.color_g << "," << (int)b.color_b << "\n";
+    }
+    fprintf(stderr, "Saved %d ball positions to %s\n", (int)balls.size(), filename.c_str());
+}
+
 void World::apply_gravity(float dt) {
     for (auto& b : balls) {
+        if (b.sleeping) continue;
         b.vel.y += gravity * dt;
     }
 }
@@ -107,12 +190,16 @@ void World::resolve_ball_wall(Ball& ball) {
             // Velocity reflection
             float vn = ball.vel.dot(n);
             if (vn < 0) {
-                // Restitution bias: kill bounce for very low velocities
-                float e = (std::abs(vn) < 5.0f) ? 0.0f : restitution;
+                float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
                 ball.vel -= n * (vn * (1.0f + e));
             }
+
+            // Wake ball on wall contact with significant velocity
+            if (ball.sleeping && std::abs(ball.vel.dot(n)) > SLEEP_SPEED_THRESHOLD) {
+                ball.sleeping = false;
+                ball.sleep_counter = 0;
+            }
         } else if (dist < 1e-6f) {
-            // Ball center is exactly on the wall — use wall normal
             ball.pos += w.normal * ball.radius;
             float vn = ball.vel.dot(w.normal);
             if (vn < 0) {
@@ -132,7 +219,7 @@ void World::resolve_ball_ball(Ball& a, Ball& b) {
         float penetration = min_dist - dist;
 
         // Positional correction with slop
-        float slop = 0.2f;
+        float slop = 0.5f;
         float correction = std::max(penetration - slop, 0.0f);
         float total_mass = a.mass + b.mass;
         a.pos -= n * (correction * (b.mass / total_mass));
@@ -141,10 +228,16 @@ void World::resolve_ball_ball(Ball& a, Ball& b) {
         // Velocity response
         float rel_vn = (b.vel - a.vel).dot(n);
         if (rel_vn < 0) {
-            float e = (std::abs(rel_vn) < 5.0f) ? 0.0f : restitution;
+            float e = (std::abs(rel_vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
             float j = -(1.0f + e) * rel_vn / (1.0f / a.mass + 1.0f / b.mass);
             a.vel -= n * (j / a.mass);
             b.vel += n * (j / b.mass);
+
+            // Wake sleeping balls on significant collision
+            if (std::abs(rel_vn) > SLEEP_SPEED_THRESHOLD) {
+                a.sleeping = false; a.sleep_counter = 0;
+                b.sleeping = false; b.sleep_counter = 0;
+            }
         }
     }
 }
@@ -155,7 +248,6 @@ void World::build_spatial_hash() {
     int total = grid_cols_ * grid_rows_;
     grid_counts_.assign(total, 0);
 
-    // Pass 1: count entries per cell
     for (int i = 0; i < (int)balls.size(); ++i) {
         auto& b = balls[i];
         int cx0 = std::max(0, (int)((b.pos.x - b.radius) / CELL_SIZE));
@@ -167,16 +259,13 @@ void World::build_spatial_hash() {
                 ++grid_counts_[cy * grid_cols_ + cx];
     }
 
-    // Pass 2: prefix sum to compute starts
     grid_starts_.resize(total + 1);
     grid_starts_[0] = 0;
     for (int i = 0; i < total; ++i)
         grid_starts_[i + 1] = grid_starts_[i] + grid_counts_[i];
 
-    // Pass 3: scatter ball indices into packed array
     int total_entries = grid_starts_[total];
     grid_data_.resize(total_entries);
-    // Reuse grid_counts_ as insertion cursor (reset to 0)
     std::fill(grid_counts_.begin(), grid_counts_.end(), 0);
     for (int i = 0; i < (int)balls.size(); ++i) {
         auto& b = balls[i];
@@ -204,19 +293,19 @@ void World::step(float dt) {
 
         apply_gravity(fixed_dt);
 
-        // Integrate positions
+        // Integrate positions (skip sleeping balls)
         for (auto& b : balls) {
+            if (b.sleeping) continue;
+            b.vel = b.vel * DAMPING;
             b.pos += b.vel * fixed_dt;
         }
 
-        // Solver iterations — rebuild spatial hash once, then iterate
+        // Solver iterations
         for (int iter = 0; iter < solver_iterations; ++iter) {
-            // Ball-wall
             for (auto& b : balls) {
                 resolve_ball_wall(b);
             }
 
-            // Ball-ball with spatial hash (rebuild each iteration since positions shift)
             build_spatial_hash();
             for (int cy = 0; cy < grid_rows_; ++cy) {
                 for (int cx = 0; cx < grid_cols_; ++cx) {
@@ -225,13 +314,11 @@ void World::step(float dt) {
                     if (cell_count == 0) continue;
                     int* cell_data = &grid_data_[cell_start];
 
-                    // Check within cell
                     for (int i = 0; i < cell_count; ++i) {
                         for (int j = i + 1; j < cell_count; ++j) {
                             resolve_ball_ball(balls[cell_data[i]], balls[cell_data[j]]);
                         }
                     }
-                    // Check neighbor cells (right, below, below-right, below-left)
                     static constexpr int neighbors[][2] = {{1,0},{0,1},{1,1},{-1,1}};
                     for (auto& nb : neighbors) {
                         int nx = cx + nb[0], ny = cy + nb[1];
@@ -254,11 +341,18 @@ void World::step(float dt) {
             }
         }
 
-        // Damping: sleep very slow balls
+        // Sleep system: track how long balls have been slow
         for (auto& b : balls) {
-            float speed2 = b.vel.length2();
-            if (speed2 < 1.0f) {
-                b.vel = b.vel * 0.9f;
+            float speed = b.vel.length();
+            if (speed < SLEEP_SPEED_THRESHOLD) {
+                b.sleep_counter++;
+                if (b.sleep_counter >= SLEEP_FRAMES_REQUIRED) {
+                    b.sleeping = true;
+                    b.vel = {0, 0};
+                }
+            } else {
+                b.sleep_counter = 0;
+                b.sleeping = false;
             }
         }
     }

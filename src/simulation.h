@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 #include <cmath>
 #include <cstdint>
 
@@ -21,10 +22,12 @@ struct Vec2 {
 
 struct Ball {
     Vec2 pos;
-    Vec2 prev_pos;
     Vec2 vel;
     float radius;
     float mass;
+    uint8_t color_r = 77, color_g = 153, color_b = 255; // default blue
+    bool sleeping = false;
+    int sleep_counter = 0;
 };
 
 struct Wall {
@@ -37,10 +40,13 @@ struct World {
     std::vector<Wall> walls;
     float gravity = 1200.0f;      // pixels/s^2
     float restitution = 0.5f;
-    int solver_iterations = 2;
+    int solver_iterations = 8;
     bool paused = false;
 
     float interpolation_alpha() const { return accumulator_ / fixed_dt_; }
+
+    void init_from_csv(const std::string& filename, int width, int height);
+    void save_csv(const std::string& filename) const;
 
     // Spatial hash
     static constexpr float CELL_SIZE = 20.0f;

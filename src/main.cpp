@@ -3,18 +3,29 @@
 #include "simulation.h"
 #include "renderer.h"
 #include <algorithm>
+#include <string>
+#include <cstring>
 
 static constexpr int WIDTH = 1280;
 static constexpr int HEIGHT = 720;
 
 int main(int argc, char* argv[]) {
-    (void)argc; (void)argv;
+    std::string scene_file;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--scene") == 0 && i + 1 < argc) {
+            scene_file = argv[++i];
+        }
+    }
 
     Renderer ren;
     if (!ren.init(WIDTH, HEIGHT)) return 1;
 
     World world;
-    world.init(WIDTH, HEIGHT);
+    if (!scene_file.empty()) {
+        world.init_from_csv(scene_file, WIDTH, HEIGHT);
+    } else {
+        world.init(WIDTH, HEIGHT);
+    }
 
     Uint64 last_time = SDL_GetPerformanceCounter();
     Uint64 freq = SDL_GetPerformanceFrequency();
@@ -34,16 +45,22 @@ int main(int argc, char* argv[]) {
                         running = false;
                         break;
                     case SDLK_R:
-                        world.init(WIDTH, HEIGHT);
+                        if (!scene_file.empty())
+                            world.init_from_csv(scene_file, WIDTH, HEIGHT);
+                        else
+                            world.init(WIDTH, HEIGHT);
                         break;
                     case SDLK_SPACE:
                         world.paused = !world.paused;
                         break;
-                    case SDLK_EQUALS: // + key
+                    case SDLK_EQUALS:
                         world.restitution = std::min(1.0f, world.restitution + 0.05f);
                         break;
                     case SDLK_MINUS:
                         world.restitution = std::max(0.0f, world.restitution - 0.05f);
+                        break;
+                    case SDLK_S:
+                        world.save_csv("final_positions.csv");
                         break;
                     default: break;
                 }
@@ -54,7 +71,6 @@ int main(int argc, char* argv[]) {
         float dt = (float)(now - last_time) / (float)freq;
         last_time = now;
 
-        // Clamp dt to avoid spiral of death
         if (dt > 1.0f / 15.0f) dt = 1.0f / 15.0f;
 
         float instant_fps = (dt > 0) ? 1.0f / dt : 60.0f;

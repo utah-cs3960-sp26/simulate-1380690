@@ -67,17 +67,17 @@ void Renderer::draw(const World& world, float fps) {
         draw_thick_line(w.a, w.b, 3.0f);
     }
 
-    // Draw balls — batch all scanline rects into one draw call
-    circle_rects_.clear();
+    // Draw balls — per-ball color, batch scanlines per ball
     for (auto& b : world.balls) {
+        SDL_SetRenderDrawColor(renderer, b.color_r, b.color_g, b.color_b, 255);
+        circle_rects_.clear();
         int ir = (int)b.radius;
         for (int dy = -ir; dy <= ir; ++dy) {
             float half_w = std::sqrt(b.radius * b.radius - (float)(dy * dy));
             circle_rects_.push_back({b.pos.x - half_w, b.pos.y + dy, half_w * 2.0f, 1.0f});
         }
+        SDL_RenderFillRects(renderer, circle_rects_.data(), (int)circle_rects_.size());
     }
-    SDL_SetRenderDrawColorFloat(renderer, 0.3f, 0.6f, 1.0f, 1.0f);
-    SDL_RenderFillRects(renderer, circle_rects_.data(), (int)circle_rects_.size());
 
     // HUD
     char buf[128];
