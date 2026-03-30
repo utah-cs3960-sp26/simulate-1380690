@@ -60,6 +60,17 @@ def main():
     SIM_W = 1280
     SIM_H = 720
 
+    # Compute bounding box of final ball positions so the image maps
+    # onto the region where balls actually settle (not the full window)
+    final_xs = [float(fb[0]) for fb in final_balls]
+    final_ys = [float(fb[1]) for fb in final_balls]
+    min_x, max_x = min(final_xs), max(final_xs)
+    min_y, max_y = min(final_ys), max(final_ys)
+    range_x = max_x - min_x if max_x > min_x else 1.0
+    range_y = max_y - min_y if max_y > min_y else 1.0
+
+    print(f"Final bounding box: x=[{min_x:.0f}, {max_x:.0f}] y=[{min_y:.0f}, {max_y:.0f}]")
+
     # Write output CSV
     with open(output_file, "w") as f:
         for i in range(len(initial_balls)):
@@ -71,13 +82,13 @@ def main():
             y_start = init[1]
             radius = init[2] if len(init) >= 3 else "5"
 
-            # Final position for color sampling
+            # Final position for color sampling — map to bounding box of settled balls
             fx = float(final[0])
             fy = float(final[1])
 
-            # Map simulator coords to image coords
-            img_x = int(fx * img_w / SIM_W)
-            img_y = int(fy * img_h / SIM_H)
+            # Normalize position within the settled region, then map to image
+            img_x = int((fx - min_x) / range_x * (img_w - 1))
+            img_y = int((fy - min_y) / range_y * (img_h - 1))
 
             # Clamp to image bounds
             img_x = max(0, min(img_x, img_w - 1))

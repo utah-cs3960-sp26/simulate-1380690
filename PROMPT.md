@@ -84,4 +84,3 @@ Never commit broken code
 
 KEY ISSUES: MUST BE FIXED
 1) The balls vibrate after they finish falling. Make the restitution amount configurable; you should see things settle down faster with less restitution, but the final "settled" state should take up the same amount of space no matter the amount of restitution.
-2) Balls cannot move through walls, this is never allowed. 

@@ -448,3 +448,16 @@ Build succeeds and committed. Here's what changed:
 3. **Physics tuned to spec** — Gravity 980, damping 0.995, sleep threshold 5.0, restitution cutoff 1.0.
 4. **Sleep/wake** — Sleeping balls skip physics; wake when hit by another ball.
 5. **Rendering** — Black background, 3px thick wall lines via triangulated geometry, pastel ball colors.
+Here's a summary of all the fixes:
+
+**Wall penetration fixes:**
+- **One-sided wall normals** — each wall now has a fixed inward-facing normal, so balls on the wrong side get pushed back correctly instead of further out
+- **Ball-ball resolved before ball-wall** — walls always win the last correction pass
+- **Extra final wall clamp** after all solver iterations ensures no ball ends inside a wall
+
+**Vibration/jitter fixes:**
+- **Bounce only on first solver iteration** — subsequent iterations do position-only correction, preventing energy injection from repeated impulse application
+- **REST_VELOCITY_CUTOFF raised to 15 px/s** (above one-frame gravity of ~8.17 px/s), so resting contacts use restitution=0
+- **Sleep counter** — balls must stay below speed threshold for 20 consecutive substeps before sleeping (prevents sleep/wake oscillation)
+- **Sleeping balls treated as infinite mass** in ball-ball resolution — awake balls pushed away instead of jostling sleeping piles
+- **Wake threshold** — sleeping balls only wake on significant impacts (rel velocity > 5 px/s)

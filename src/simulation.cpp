@@ -4,6 +4,8 @@
 #include <fstream>
 #include <sstream>
 #include <cstdio>
+#include <iomanip>
+#include <limits>
 
 // Closest point on segment ab to point p
 static Vec2 closest_point_on_segment(Vec2 p, Vec2 a, Vec2 b) {
@@ -193,6 +195,7 @@ void World::save_csv(const std::string& filename) const {
         fprintf(stderr, "Failed to save CSV: %s\n", filename.c_str());
         return;
     }
+    file << std::setprecision(std::numeric_limits<float>::max_digits10);
     for (auto& b : balls) {
         file << b.pos.x << "," << b.pos.y << "," << b.radius << ","
              << (int)b.color_r << "," << (int)b.color_g << "," << (int)b.color_b << "\n";
@@ -413,10 +416,12 @@ void World::substep() {
     // 3. Final wall clamp — ensure no ball is inside a wall after all resolution
     resolve_ball_wall(false);
 
-    // 4. Apply damping
+    // 4. Apply damping — stronger for slow-moving balls to kill micro-jitter
     for (int i = 0; i < n; ++i) {
         if (!balls[i].sleeping) {
-            balls[i].vel = balls[i].vel * DAMPING;
+            float speed2 = balls[i].vel.length2();
+            float damp = (speed2 < 30.0f * 30.0f) ? 0.98f : DAMPING;
+            balls[i].vel = balls[i].vel * damp;
         }
     }
 
@@ -430,7 +435,7 @@ void World::substep() {
                 balls[i].sleeping = true;
             }
         } else {
-            balls[i].sleep_counter = 0;
+            if (balls[i].sleep_counter > 0) balls[i].sleep_counter--;
         }
     }
 }

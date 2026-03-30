@@ -52,10 +52,10 @@ private:
     static constexpr int MAX_SUBSTEPS = 8;
     static constexpr int SOLVER_ITERATIONS = 10;
     static constexpr float DAMPING = 0.995f;
-    static constexpr float SLEEP_SPEED = 5.0f;
-    static constexpr int SLEEP_FRAMES_REQUIRED = 20;
-    static constexpr float REST_VELOCITY_CUTOFF = 15.0f;
-    static constexpr float WAKE_IMPULSE_THRESHOLD = 5.0f;
+    static constexpr float SLEEP_SPEED = 8.0f;
+    static constexpr int SLEEP_FRAMES_REQUIRED = 10;
+    static constexpr float REST_VELOCITY_CUTOFF = 20.0f;
+    static constexpr float WAKE_IMPULSE_THRESHOLD = 30.0f;
     static constexpr float CELL_SIZE = 16.0f;
 
     float accumulator_ = 0.0f;
