@@ -409,3 +409,15 @@ All three critical issues have been fixed:
 1. **Wall tunneling** → Added `prev_pos` tracking and swept collision detection with full positional correction
 2. **Not all balls dropping** → Spawning now restricted to above the funnel; lowered funnel to 55% height to fit all 1000 balls
 3. **Unnatural falling** → Reduced damping (0.998→0.9995), reduced wall friction (0.3→0.03), removed progressive damping, made sleep contact-based (must be touching something AND slow for 120 frames)
+All changes are committed and tested. Here's a summary of what was fixed:
+
+**Root cause of vibration**: The restitution cutoff velocity (2.0) was far below the gravity-induced velocity per substep (~15 px/s). Resting balls would accumulate gravity, exceed the cutoff, bounce with e=0.5, and never settle. Fixed with dynamic cutoff `max(20, 2*gravity*dt)` ≈ 30.
+
+**Key changes:**
+1. **Dynamic restitution cutoff** — ensures resting contacts always use e=0
+2. **Stable wall normals** — use precomputed `w.normal` instead of fragile `prev_pos`-based orientation
+3. **Slop-based wall correction** — prevents over-correction oscillation
+4. **Softer ball-ball correction** — slop 0.75px, factor 0.3 (was 0.3/0.6)
+5. **Raised gravity** — 1200→1800 px/s² for natural feel
+6. **Progressive damping** — near-rest balls damp faster (0.98 vs 0.9992)
+7. **Higher sleep/wake thresholds** — sleep at 8 px/s, wake at 15 px/s

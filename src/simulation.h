@@ -30,6 +30,7 @@ struct Ball {
     bool sleeping = false;
     int sleep_counter = 0;
     int contact_count = 0;
+    int unsupported_counter = 0;
 };
 
 struct Wall {

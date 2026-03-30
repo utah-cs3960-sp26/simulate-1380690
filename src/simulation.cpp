@@ -19,14 +19,15 @@ static Vec2 closest_point_on_segment(Vec2 p, Vec2 a, Vec2 b) {
     return a + ab * t;
 }
 
-static constexpr float SLEEP_SPEED_THRESHOLD = 8.0f;
-static constexpr int SLEEP_FRAMES_REQUIRED = 90;
-static constexpr float DAMPING = 0.9992f;
+static constexpr float SLEEP_SPEED_THRESHOLD = 12.0f;
+static constexpr int SLEEP_FRAMES_REQUIRED = 60;
+static constexpr float DAMPING = 0.9998f;
 static constexpr float WALL_FRICTION = 0.02f;
-static constexpr float WALL_SLOP = 0.15f;
-static constexpr float BALL_SLOP = 0.75f;
-static constexpr float BALL_CORRECTION_PCT = 0.3f;
-static constexpr float WAKE_SPEED_THRESHOLD = 15.0f;
+static constexpr float WALL_SLOP = 0.05f;
+static constexpr float BALL_SLOP = 0.20f;
+static constexpr float BALL_CORRECTION_PCT = 0.6f;
+static constexpr float WAKE_SPEED_THRESHOLD = 20.0f;
+static constexpr float BALL_BALL_FRICTION = 0.02f;
 
 void World::init(int width, int height) {
     world_w = width;
@@ -45,12 +46,12 @@ void World::init(int width, int height) {
     walls.push_back({{left, top}, {left, bottom}, {1, 0}});
     walls.push_back({{right, top}, {right, bottom}, {-1, 0}});
 
-    // Funnel: two angled walls in the middle area (lowered to allow more spawn space)
+    // Funnel: two angled walls in the middle area
     float cx = width / 2.0f;
     float funnel_top = height * 0.55f;
-    float funnel_gap = 60.0f;
-    walls.push_back({{left + 40, funnel_top - 100}, {cx - funnel_gap, funnel_top}, {}});
-    walls.push_back({{right - 40, funnel_top - 100}, {cx + funnel_gap, funnel_top}, {}});
+    float funnel_half_gap = 40.0f; // total opening = 80px
+    walls.push_back({{left + 40, funnel_top - 100}, {cx - funnel_half_gap, funnel_top}, {}});
+    walls.push_back({{right - 40, funnel_top - 100}, {cx + funnel_half_gap, funnel_top}, {}});
 
     // Recompute wall normals (perpendicular to wall, pointing toward screen center)
     for (auto& w : walls) {
@@ -120,9 +121,9 @@ void World::init_from_csv(const std::string& filename, int width, int height) {
 
     float cx = width / 2.0f;
     float funnel_top = height * 0.55f;
-    float funnel_gap = 60.0f;
-    walls.push_back({{left + 40, funnel_top - 100}, {cx - funnel_gap, funnel_top}, {}});
-    walls.push_back({{right - 40, funnel_top - 100}, {cx + funnel_gap, funnel_top}, {}});
+    float funnel_half_gap = 40.0f;
+    walls.push_back({{left + 40, funnel_top - 100}, {cx - funnel_half_gap, funnel_top}, {}});
+    walls.push_back({{right - 40, funnel_top - 100}, {cx + funnel_half_gap, funnel_top}, {}});
 
     for (auto& w : walls) {
         Vec2 edge = w.b - w.a;
@@ -225,13 +226,9 @@ void World::resolve_ball_wall(Ball& ball) {
         float penetration = ball.radius - curr_sep;
         if (crossed && penetration < 0.0f) penetration = ball.radius;
 
-        // Positional correction with slop for deep penetrations, full for severe
-        if (penetration > 1.0f) {
-            ball.pos += n * penetration;
-        } else {
-            float correction = std::max(penetration - WALL_SLOP, 0.0f);
-            if (correction > 0.0f) ball.pos += n * correction;
-        }
+        // Positional correction — tight, with minimal slop
+        float correction = std::max(penetration - WALL_SLOP, 0.0f);
+        if (correction > 0.0f) ball.pos += n * correction;
 
         // Velocity reflection
         float vn = ball.vel.dot(n);
@@ -302,6 +299,12 @@ void World::resolve_ball_ball(Ball& a, Ball& b) {
             float j = -(1.0f + e) * rel_vn / (1.0f / a.mass + 1.0f / b.mass);
             if (!a.sleeping) a.vel -= n * (j / a.mass);
             if (!b.sleeping) b.vel += n * (j / b.mass);
+
+            // Tangential friction to dissipate lateral/rotational energy
+            Vec2 rel2 = b.vel - a.vel;
+            Vec2 vt = rel2 - n * rel2.dot(n);
+            if (!a.sleeping) a.vel += vt * (0.5f * BALL_BALL_FRICTION);
+            if (!b.sleeping) b.vel -= vt * (0.5f * BALL_BALL_FRICTION);
         }
     }
 }
@@ -417,13 +420,7 @@ void World::step(float dt) {
         // Integrate positions (skip sleeping balls)
         for (auto& b : balls) {
             if (b.sleeping) continue;
-            // Progressive damping: stronger as speed approaches sleep threshold
-            float speed = b.vel.length();
-            float damp = DAMPING;
-            if (speed < SLEEP_SPEED_THRESHOLD * 2.0f && b.sleep_counter > 0) {
-                damp = 0.98f; // stronger damping for near-rest balls in contact
-            }
-            b.vel = b.vel * damp;
+            b.vel = b.vel * DAMPING;
             b.pos += b.vel * fixed_dt;
         }
 
@@ -447,10 +444,15 @@ void World::step(float dt) {
             float speed = b.vel.length();
 
             if (b.sleeping) {
-                // Wake up if unsupported (fell off something)
+                // Hysteretic wake: require several unsupported substeps
                 if (b.contact_count == 0) {
-                    b.sleeping = false;
-                    b.sleep_counter = 0;
+                    if (++b.unsupported_counter >= 3) {
+                        b.sleeping = false;
+                        b.sleep_counter = 0;
+                        b.unsupported_counter = 0;
+                    }
+                } else {
+                    b.unsupported_counter = 0;
                 }
                 continue;
             }
