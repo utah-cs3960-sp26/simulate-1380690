@@ -190,20 +190,24 @@ void World::resolve_ball_wall(Ball& ball) {
             // Velocity reflection
             float vn = ball.vel.dot(n);
             if (vn < 0) {
+                // Wake sleeping ball before applying velocity response
+                if (ball.sleeping) {
+                    ball.sleeping = false;
+                    ball.sleep_counter = 0;
+                }
                 float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
                 ball.vel -= n * (vn * (1.0f + e));
-            }
-
-            // Wake ball on wall contact with significant velocity
-            if (ball.sleeping && std::abs(ball.vel.dot(n)) > SLEEP_SPEED_THRESHOLD) {
-                ball.sleeping = false;
-                ball.sleep_counter = 0;
             }
         } else if (dist < 1e-6f) {
             ball.pos += w.normal * ball.radius;
             float vn = ball.vel.dot(w.normal);
             if (vn < 0) {
-                ball.vel -= w.normal * (vn * (1.0f + restitution));
+                if (ball.sleeping) {
+                    ball.sleeping = false;
+                    ball.sleep_counter = 0;
+                }
+                float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
+                ball.vel -= w.normal * (vn * (1.0f + e));
             }
         }
     }
