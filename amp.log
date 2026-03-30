@@ -368,3 +368,18 @@ Here's what I fixed:
 2. **Counting-sort spatial hash** — replaced `vector<vector<int>>` with flat arrays, eliminating thousands of heap allocations per rebuild
 3. **Batched circle rendering** — all scanline rects batched into one `SDL_RenderFillRects` call instead of ~13k individual draw calls
 4. **Reduced solver iterations** from 10→4 to stay within 60fps frame budget
+All done. Here's a summary of what was implemented:
+
+**Fixes applied:**
+- **Sleep system**: Balls track low-speed frames; after 30 frames below 5 px/s, they sleep (skip gravity/velocity). Wake on significant collision.
+- **Restitution cutoff**: Contacts with relative normal velocity < 1.0 use e=0.0 to kill micro-bounces
+- **Velocity damping**: 0.999 factor per substep for subtle energy bleed
+- **Positional correction slop**: 0.5px to prevent over-correction oscillation
+- **Solver iterations**: Increased to 8 for stacking stability
+
+**New features:**
+- **Per-ball RGB colors** rendered individually
+- **CSV load**: `./build/physics_sim --scene initial.csv`
+- **CSV save**: Press `S` to write `final_positions.csv`
+- **Color assignment tool**: `python3 tools/assign_colors.py initial.csv final_positions.csv image.png output.csv`
+- **Image reveal workflow** documented in README
