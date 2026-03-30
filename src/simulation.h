@@ -41,9 +41,9 @@ struct Wall {
 struct World {
     std::vector<Ball> balls;
     std::vector<Wall> walls;
-    float gravity = 1800.0f;      // pixels/s^2
+    float gravity = 2200.0f;      // pixels/s^2
     float restitution = 0.5f;
-    int solver_iterations = 10;
+    int solver_iterations = 12;
     bool paused = false;
 
     float interpolation_alpha() const { return accumulator_ / fixed_dt_; }
