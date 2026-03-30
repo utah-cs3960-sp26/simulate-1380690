@@ -351,6 +351,7 @@ Current Issues (fix these first)
 1) Balls vibrate at rest. This must not happen. 
 2) Performance is slow. It takes too long for all the balls to drop, and they fall slowly.
  Make them fall smoother and more realistically.
+3) The balls aren't naturally falling and are creating a vortex of never-ending falling. The whole simulator does not work as implemented. 
 
 Week 9 Feature: Image Reveal via CSV Scene Description
 Goal
