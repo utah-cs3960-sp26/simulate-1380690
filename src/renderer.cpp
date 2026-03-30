@@ -92,8 +92,13 @@ void Renderer::draw(const World& world, float fps) {
     snprintf(buf, sizeof(buf), "Restitution: %.2f", world.restitution);
     SDL_RenderDebugText(renderer, 10, 42, buf);
 
+    int sleeping = 0;
+    for (auto& b : world.balls) if (b.sleeping) ++sleeping;
+    snprintf(buf, sizeof(buf), "Sleeping: %d", sleeping);
+    SDL_RenderDebugText(renderer, 10, 58, buf);
+
     if (world.paused) {
-        SDL_RenderDebugText(renderer, 10, 58, "PAUSED");
+        SDL_RenderDebugText(renderer, 10, 74, "PAUSED");
     }
 
     SDL_RenderPresent(renderer);
