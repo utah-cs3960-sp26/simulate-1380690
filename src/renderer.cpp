@@ -67,15 +67,33 @@ void Renderer::draw(const World& world, float fps) {
         draw_thick_line(w.a, w.b, 3.0f);
     }
 
-    // Draw balls — per-ball color, batch scanlines per ball
+    // Draw balls — batch all scanlines into one array per draw color change
+    // Pre-reserve space to avoid reallocations
+    circle_rects_.clear();
+    circle_rects_.reserve(world.balls.size() * 12);
+
+    // Sort balls by color for better batching would be costly, so just
+    // batch per-ball and flush per color change
+    uint8_t last_r = 0, last_g = 0, last_b = 0;
+    bool first = true;
     for (auto& b : world.balls) {
-        SDL_SetRenderDrawColor(renderer, b.color_r, b.color_g, b.color_b, 255);
-        circle_rects_.clear();
+        // Flush batch on color change
+        if (first || b.color_r != last_r || b.color_g != last_g || b.color_b != last_b) {
+            if (!first && !circle_rects_.empty()) {
+                SDL_RenderFillRects(renderer, circle_rects_.data(), (int)circle_rects_.size());
+                circle_rects_.clear();
+            }
+            SDL_SetRenderDrawColor(renderer, b.color_r, b.color_g, b.color_b, 255);
+            last_r = b.color_r; last_g = b.color_g; last_b = b.color_b;
+            first = false;
+        }
         int ir = (int)b.radius;
         for (int dy = -ir; dy <= ir; ++dy) {
             float half_w = std::sqrt(b.radius * b.radius - (float)(dy * dy));
             circle_rects_.push_back({b.pos.x - half_w, b.pos.y + dy, half_w * 2.0f, 1.0f});
         }
+    }
+    if (!circle_rects_.empty()) {
         SDL_RenderFillRects(renderer, circle_rects_.data(), (int)circle_rects_.size());
     }
 
