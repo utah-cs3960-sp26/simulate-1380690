@@ -417,7 +417,13 @@ void World::step(float dt) {
         // Integrate positions (skip sleeping balls)
         for (auto& b : balls) {
             if (b.sleeping) continue;
-            b.vel = b.vel * DAMPING;
+            // Progressive damping: stronger as speed approaches sleep threshold
+            float speed = b.vel.length();
+            float damp = DAMPING;
+            if (speed < SLEEP_SPEED_THRESHOLD * 2.0f && b.sleep_counter > 0) {
+                damp = 0.98f; // stronger damping for near-rest balls in contact
+            }
+            b.vel = b.vel * damp;
             b.pos += b.vel * fixed_dt;
         }
 
