@@ -26,11 +26,13 @@ struct Ball {
     float radius;
     float mass;
     bool sleeping = false;
+    int sleep_counter = 0;
     uint8_t color_r = 255, color_g = 255, color_b = 255;
 };
 
 struct WallSegment {
     Vec2 a, b;
+    Vec2 normal;  // inward-facing normal (points toward legal region)
 };
 
 struct World {
@@ -51,7 +53,9 @@ private:
     static constexpr int SOLVER_ITERATIONS = 10;
     static constexpr float DAMPING = 0.995f;
     static constexpr float SLEEP_SPEED = 5.0f;
-    static constexpr float REST_VELOCITY_CUTOFF = 1.0f;
+    static constexpr int SLEEP_FRAMES_REQUIRED = 20;
+    static constexpr float REST_VELOCITY_CUTOFF = 15.0f;
+    static constexpr float WAKE_IMPULSE_THRESHOLD = 5.0f;
     static constexpr float CELL_SIZE = 16.0f;
 
     float accumulator_ = 0.0f;
@@ -66,4 +70,6 @@ private:
     void substep();
     void build_spatial_hash();
     void setup_walls(int width, int height);
+    void resolve_ball_wall(bool apply_bounce);
+    void resolve_ball_ball(bool apply_bounce);
 };

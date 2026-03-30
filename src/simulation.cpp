@@ -15,45 +15,99 @@ static Vec2 closest_point_on_segment(Vec2 p, Vec2 a, Vec2 b) {
     return a + ab * t;
 }
 
+// Create a wall segment with a precomputed inward normal
+static WallSegment make_wall(Vec2 a, Vec2 b, Vec2 interior_point) {
+    Vec2 ab = b - a;
+    // Perpendicular: (-dy, dx)
+    Vec2 n(-ab.y, ab.x);
+    float len = n.length();
+    if (len > 1e-8f) n = n * (1.0f / len);
+    // Make sure normal points toward the interior
+    if ((interior_point - a).dot(n) < 0) {
+        n = n * -1.0f;
+    }
+    return {a, b, n};
+}
+
 void World::setup_walls(int width, int height) {
     walls.clear();
 
-    // Funnel top: two angled walls forming a V
-    // Funnel mouth spans most of the top, narrows to ~120px opening
+    float center_x = (float)width / 2.0f;
+
+    // Funnel parameters
     float funnel_top_y = 50.0f;
     float funnel_bottom_y = 250.0f;
     float funnel_top_left = 100.0f;
     float funnel_top_right = (float)width - 100.0f;
-    float funnel_gap = 60.0f;  // half-width of opening
-    float center_x = (float)width / 2.0f;
+    float funnel_gap = 60.0f;
 
-    // Left funnel wall (top-left to center-left)
-    walls.push_back({Vec2(funnel_top_left, funnel_top_y), Vec2(center_x - funnel_gap, funnel_bottom_y)});
-    // Right funnel wall (top-right to center-right)
-    walls.push_back({Vec2(funnel_top_right, funnel_top_y), Vec2(center_x + funnel_gap, funnel_bottom_y)});
-
-    // Box below funnel
+    // Box parameters
     float box_left = center_x - 400.0f;
     float box_right = center_x + 400.0f;
     float box_top = funnel_bottom_y;
     float box_bottom = (float)height - 30.0f;
 
-    // Left wall of box (connects funnel to box)
-    walls.push_back({Vec2(center_x - funnel_gap, funnel_bottom_y), Vec2(box_left, funnel_bottom_y)});
-    // Left side of box
-    walls.push_back({Vec2(box_left, box_top), Vec2(box_left, box_bottom)});
-    // Bottom of box
-    walls.push_back({Vec2(box_left, box_bottom), Vec2(box_right, box_bottom)});
-    // Right side of box
-    walls.push_back({Vec2(box_right, box_bottom), Vec2(box_right, box_top)});
-    // Right wall of box (connects funnel to box)
-    walls.push_back({Vec2(box_right, funnel_bottom_y), Vec2(center_x + funnel_gap, funnel_bottom_y)});
+    // Interior point for normal computation (center of box)
+    Vec2 interior(center_x, (box_top + box_bottom) / 2.0f);
+    // Interior point for funnel (center of funnel)
+    Vec2 funnel_interior(center_x, (funnel_top_y + funnel_bottom_y) / 2.0f);
 
-    // Extended funnel side walls down to box edges
-    walls.push_back({Vec2(funnel_top_left, funnel_top_y), Vec2(box_left, funnel_top_y)});
-    walls.push_back({Vec2(box_left, funnel_top_y), Vec2(box_left, box_top)});
-    walls.push_back({Vec2(funnel_top_right, funnel_top_y), Vec2(box_right, funnel_top_y)});
-    walls.push_back({Vec2(box_right, funnel_top_y), Vec2(box_right, box_top)});
+    // Left funnel wall
+    walls.push_back(make_wall(
+        Vec2(funnel_top_left, funnel_top_y),
+        Vec2(center_x - funnel_gap, funnel_bottom_y),
+        funnel_interior));
+    // Right funnel wall
+    walls.push_back(make_wall(
+        Vec2(funnel_top_right, funnel_top_y),
+        Vec2(center_x + funnel_gap, funnel_bottom_y),
+        funnel_interior));
+
+    // Horizontal ledge connecting funnel to box (left side)
+    walls.push_back(make_wall(
+        Vec2(center_x - funnel_gap, funnel_bottom_y),
+        Vec2(box_left, funnel_bottom_y),
+        interior));
+    // Horizontal ledge connecting funnel to box (right side)
+    walls.push_back(make_wall(
+        Vec2(box_right, funnel_bottom_y),
+        Vec2(center_x + funnel_gap, funnel_bottom_y),
+        interior));
+
+    // Left side of box
+    walls.push_back(make_wall(
+        Vec2(box_left, box_top),
+        Vec2(box_left, box_bottom),
+        interior));
+    // Bottom of box
+    walls.push_back(make_wall(
+        Vec2(box_left, box_bottom),
+        Vec2(box_right, box_bottom),
+        interior));
+    // Right side of box
+    walls.push_back(make_wall(
+        Vec2(box_right, box_bottom),
+        Vec2(box_right, box_top),
+        interior));
+
+    // Extended funnel side walls
+    Vec2 upper_interior(center_x, funnel_top_y + 10.0f);
+    walls.push_back(make_wall(
+        Vec2(funnel_top_left, funnel_top_y),
+        Vec2(box_left, funnel_top_y),
+        upper_interior));
+    walls.push_back(make_wall(
+        Vec2(box_left, funnel_top_y),
+        Vec2(box_left, box_top),
+        interior));
+    walls.push_back(make_wall(
+        Vec2(funnel_top_right, funnel_top_y),
+        Vec2(box_right, funnel_top_y),
+        upper_interior));
+    walls.push_back(make_wall(
+        Vec2(box_right, funnel_top_y),
+        Vec2(box_right, box_top),
+        interior));
 }
 
 void World::init(int width, int height) {
@@ -68,11 +122,10 @@ void World::init(int width, int height) {
     std::uniform_real_distribution<float> jitter(-0.2f, 0.2f);
     std::uniform_int_distribution<int> color_dist(150, 255);
 
-    // Spawn balls above the funnel mouth in a grid
     float spacing = 13.0f;
     float spawn_left = 120.0f;
     float spawn_right = (float)width - 120.0f;
-    float spawn_top = -800.0f;  // Above screen, above funnel mouth
+    float spawn_top = -800.0f;
 
     int cols = (int)((spawn_right - spawn_left) / spacing);
     int target = 1000;
@@ -149,7 +202,7 @@ void World::save_csv(const std::string& filename) const {
 
 void World::build_spatial_hash() {
     grid_cols_ = (int)(world_w_ / CELL_SIZE) + 1;
-    grid_rows_ = (int)((world_h_ + 1000) / CELL_SIZE) + 1;  // Extra rows for balls above screen
+    grid_rows_ = (int)((world_h_ + 1000) / CELL_SIZE) + 1;
     int total = grid_cols_ * grid_rows_;
     grid_counts_.assign(total, 0);
 
@@ -176,105 +229,156 @@ void World::build_spatial_hash() {
     }
 }
 
-void World::substep() {
-    float dt = fixed_dt_;
+void World::resolve_ball_wall(bool apply_bounce) {
     int n = (int)balls.size();
-
-    // 1. Apply gravity and integrate position
     for (int i = 0; i < n; ++i) {
-        if (balls[i].sleeping) continue;
-        balls[i].vel.y += GRAVITY * dt;
-        balls[i].pos += balls[i].vel * dt;
-    }
+        Ball& ball = balls[i];
+        for (auto& wall : walls) {
+            Vec2 closest = closest_point_on_segment(ball.pos, wall.a, wall.b);
+            Vec2 diff = ball.pos - closest;
+            float dist2 = diff.length2();
+            if (dist2 >= ball.radius * ball.radius) continue;
 
-    // 2. Resolve collisions (multiple iterations for stable stacking)
-    for (int iter = 0; iter < SOLVER_ITERATIONS; ++iter) {
-        build_spatial_hash();
+            // Use the wall's fixed inward normal
+            Vec2 normal = wall.normal;
 
-        // Ball-wall segment collisions
-        for (int i = 0; i < n; ++i) {
-            Ball& ball = balls[i];
-            for (auto& wall : walls) {
-                Vec2 closest = closest_point_on_segment(ball.pos, wall.a, wall.b);
-                Vec2 diff = ball.pos - closest;
-                float dist2 = diff.length2();
-                if (dist2 >= ball.radius * ball.radius || dist2 < 1e-8f) continue;
+            // Check if ball center is on the wrong side of the wall
+            float signed_dist = (ball.pos - wall.a).dot(normal);
+            float dist = std::sqrt(dist2);
 
-                float dist = std::sqrt(dist2);
-                Vec2 normal = diff * (1.0f / dist);
-                float penetration = ball.radius - dist;
+            float penetration;
+            if (signed_dist < 0) {
+                // Ball center is on the wrong side — push it fully back
+                penetration = ball.radius + std::abs(signed_dist);
+                // Use wall normal directly since we're on wrong side
+            } else if (dist < ball.radius) {
+                penetration = ball.radius - dist;
+                // Use actual direction if on correct side
+                if (dist > 1e-4f) {
+                    normal = diff * (1.0f / dist);
+                }
+            } else {
+                continue;
+            }
 
-                // Push out along normal
-                ball.pos += normal * penetration;
+            ball.pos += normal * penetration;
 
-                // Reflect velocity component along normal
-                float vn = ball.vel.dot(normal);
-                if (vn < 0) {
+            // Velocity: remove inward component (and optionally bounce)
+            float vn = ball.vel.dot(normal);
+            if (vn < 0) {
+                if (apply_bounce) {
                     float e = (std::abs(vn) < REST_VELOCITY_CUTOFF) ? 0.0f : restitution;
                     ball.vel -= normal * ((1.0f + e) * vn);
-                    if (ball.sleeping) {
-                        ball.sleeping = false;
-                    }
+                } else {
+                    // Position-only: just remove the penetrating velocity component
+                    ball.vel -= normal * vn;
+                }
+                if (ball.sleeping) {
+                    ball.sleeping = false;
+                    ball.sleep_counter = 0;
                 }
             }
         }
+    }
+}
 
-        // Ball-ball collisions via spatial hash
-        for (int cy = 0; cy < grid_rows_; ++cy) {
-            for (int cx = 0; cx < grid_cols_; ++cx) {
-                int cell_idx = cy * grid_cols_ + cx;
-                int cell_start = grid_starts_[cell_idx];
-                int cell_count = grid_starts_[cell_idx + 1] - cell_start;
-                if (cell_count == 0) continue;
+void World::resolve_ball_ball(bool apply_bounce) {
+    static constexpr int neighbors[][2] = {{0,0},{1,0},{0,1},{1,1},{-1,1}};
 
-                static constexpr int neighbors[][2] = {{0,0},{1,0},{0,1},{1,1},{-1,1}};
-                for (auto& nb : neighbors) {
-                    int nx = cx + nb[0], ny = cy + nb[1];
-                    if (nx < 0 || nx >= grid_cols_ || ny < 0 || ny >= grid_rows_) continue;
-                    int nidx = ny * grid_cols_ + nx;
-                    int nstart = grid_starts_[nidx];
-                    int ncount = grid_starts_[nidx + 1] - nstart;
-                    if (ncount == 0) continue;
+    for (int cy = 0; cy < grid_rows_; ++cy) {
+        for (int cx = 0; cx < grid_cols_; ++cx) {
+            int cell_idx = cy * grid_cols_ + cx;
+            int cell_start = grid_starts_[cell_idx];
+            int cell_count = grid_starts_[cell_idx + 1] - cell_start;
+            if (cell_count == 0) continue;
 
-                    bool same_cell = (nb[0] == 0 && nb[1] == 0);
+            for (auto& nb : neighbors) {
+                int nx = cx + nb[0], ny = cy + nb[1];
+                if (nx < 0 || nx >= grid_cols_ || ny < 0 || ny >= grid_rows_) continue;
+                int nidx = ny * grid_cols_ + nx;
+                int nstart = grid_starts_[nidx];
+                int ncount = grid_starts_[nidx + 1] - nstart;
+                if (ncount == 0) continue;
 
-                    for (int i = 0; i < cell_count; ++i) {
-                        int ai = grid_data_[cell_start + i];
-                        int j_start = same_cell ? i + 1 : 0;
-                        for (int j = j_start; j < ncount; ++j) {
-                            int bi = grid_data_[nstart + j];
-                            if (ai == bi) continue;
+                bool same_cell = (nb[0] == 0 && nb[1] == 0);
 
-                            Ball& a = balls[ai];
-                            Ball& b = balls[bi];
-                            Vec2 diff = b.pos - a.pos;
-                            float dist2 = diff.length2();
-                            float min_dist = a.radius + b.radius;
+                for (int i = 0; i < cell_count; ++i) {
+                    int ai = grid_data_[cell_start + i];
+                    int j_start = same_cell ? i + 1 : 0;
+                    for (int j = j_start; j < ncount; ++j) {
+                        int bi = grid_data_[nstart + j];
+                        if (ai == bi) continue;
 
-                            if (dist2 >= min_dist * min_dist || dist2 < 1e-8f) continue;
+                        Ball& a = balls[ai];
+                        Ball& b = balls[bi];
+                        Vec2 diff = b.pos - a.pos;
+                        float dist2 = diff.length2();
+                        float min_dist = a.radius + b.radius;
 
-                            float dist = std::sqrt(dist2);
-                            Vec2 normal = diff * (1.0f / dist);
-                            float overlap = min_dist - dist;
+                        if (dist2 >= min_dist * min_dist) continue;
 
-                            // Push apart — mass-weighted
+                        float dist;
+                        Vec2 normal;
+                        if (dist2 < 1e-8f) {
+                            // Centers coincide — use arbitrary separation direction
+                            normal = Vec2(0, 1);
+                            dist = 0.0f;
+                        } else {
+                            dist = std::sqrt(dist2);
+                            normal = diff * (1.0f / dist);
+                        }
+                        float overlap = min_dist - dist;
+
+                        // Position correction: treat sleeping balls as immovable
+                        bool a_sleep = a.sleeping;
+                        bool b_sleep = b.sleeping;
+
+                        if (a_sleep && b_sleep) {
+                            // Both sleeping — split equally but don't wake
+                            a.pos -= normal * (overlap * 0.5f);
+                            b.pos += normal * (overlap * 0.5f);
+                            continue;
+                        }
+
+                        if (a_sleep) {
+                            // Only move b
+                            b.pos += normal * overlap;
+                        } else if (b_sleep) {
+                            // Only move a
+                            a.pos -= normal * overlap;
+                        } else {
+                            // Both awake — mass-weighted
                             float total_mass = a.mass + b.mass;
                             float a_share = b.mass / total_mass;
                             float b_share = a.mass / total_mass;
                             a.pos -= normal * (overlap * a_share);
                             b.pos += normal * (overlap * b_share);
+                        }
 
-                            // Velocity impulse
-                            float rel_vn = (b.vel - a.vel).dot(normal);
-                            if (rel_vn < 0) {
-                                float e = (std::abs(rel_vn) < REST_VELOCITY_CUTOFF) ? 0.0f : restitution;
-                                float j_imp = -(1.0f + e) * rel_vn / (1.0f / a.mass + 1.0f / b.mass);
-                                a.vel -= normal * (j_imp / a.mass);
-                                b.vel += normal * (j_imp / b.mass);
+                        // Velocity impulse
+                        float rel_vn = (b.vel - a.vel).dot(normal);
+                        if (rel_vn < 0) {
+                            float e;
+                            if (apply_bounce) {
+                                e = (std::abs(rel_vn) < REST_VELOCITY_CUTOFF) ? 0.0f : restitution;
+                            } else {
+                                e = 0.0f;
+                            }
 
-                                // Wake sleeping balls on collision
-                                if (a.sleeping) a.sleeping = false;
-                                if (b.sleeping) b.sleeping = false;
+                            // Effective masses (sleeping = infinite mass)
+                            float inv_mass_a = a_sleep ? 0.0f : (1.0f / a.mass);
+                            float inv_mass_b = b_sleep ? 0.0f : (1.0f / b.mass);
+                            float inv_mass_sum = inv_mass_a + inv_mass_b;
+                            if (inv_mass_sum < 1e-8f) continue;
+
+                            float j_imp = -(1.0f + e) * rel_vn / inv_mass_sum;
+                            a.vel -= normal * (j_imp * inv_mass_a);
+                            b.vel += normal * (j_imp * inv_mass_b);
+
+                            // Wake sleeping balls only on significant impact
+                            if (std::abs(rel_vn) > WAKE_IMPULSE_THRESHOLD) {
+                                if (a_sleep) { a.sleeping = false; a.sleep_counter = 0; }
+                                if (b_sleep) { b.sleeping = false; b.sleep_counter = 0; }
                             }
                         }
                     }
@@ -282,19 +386,51 @@ void World::substep() {
             }
         }
     }
+}
 
-    // 3. Apply damping
+void World::substep() {
+    float dt = fixed_dt_;
+    int n = (int)balls.size();
+
+    // 1. Apply gravity and integrate position (skip sleeping balls)
+    for (int i = 0; i < n; ++i) {
+        if (balls[i].sleeping) continue;
+        balls[i].vel.y += GRAVITY * dt;
+        balls[i].pos += balls[i].vel * dt;
+    }
+
+    // 2. Collision resolution iterations
+    // First iteration: apply bounce impulses
+    // Subsequent iterations: position correction only (no bounce to avoid energy injection)
+    for (int iter = 0; iter < SOLVER_ITERATIONS; ++iter) {
+        build_spatial_hash();
+        bool apply_bounce = (iter == 0);
+        // Ball-ball first, then ball-wall (so walls always win)
+        resolve_ball_ball(apply_bounce);
+        resolve_ball_wall(apply_bounce);
+    }
+
+    // 3. Final wall clamp — ensure no ball is inside a wall after all resolution
+    resolve_ball_wall(false);
+
+    // 4. Apply damping
     for (int i = 0; i < n; ++i) {
         if (!balls[i].sleeping) {
             balls[i].vel = balls[i].vel * DAMPING;
         }
     }
 
-    // 4. Sleep: if speed < threshold, zero velocity
+    // 5. Sleep: require multiple consecutive slow substeps before sleeping
     for (int i = 0; i < n; ++i) {
-        if (!balls[i].sleeping && balls[i].vel.length2() < SLEEP_SPEED * SLEEP_SPEED) {
-            balls[i].vel = {0, 0};
-            balls[i].sleeping = true;
+        if (balls[i].sleeping) continue;
+        if (balls[i].vel.length2() < SLEEP_SPEED * SLEEP_SPEED) {
+            balls[i].sleep_counter++;
+            if (balls[i].sleep_counter >= SLEEP_FRAMES_REQUIRED) {
+                balls[i].vel = {0, 0};
+                balls[i].sleeping = true;
+            }
+        } else {
+            balls[i].sleep_counter = 0;
         }
     }
 }

@@ -441,3 +441,10 @@ Everything is in place. The complete rewrite is done:
 - **Aggressive damping**: 0.99 per substep ensures energy bleeds out quickly
 
 Run `./physics_sim` from the `build/` directory to test. Balls should fall, bounce, and settle at the bottom without vortexing.
+Build succeeds and committed. Here's what changed:
+
+1. **Funnel scene** — V-shaped funnel (two angled walls) at top feeding into a wide rectangular box below. Balls spawn above the funnel in a grid.
+2. **Wall segment collisions** — Point-to-segment projection replaces AABB checks. Works with any angled wall.
+3. **Physics tuned to spec** — Gravity 980, damping 0.995, sleep threshold 5.0, restitution cutoff 1.0.
+4. **Sleep/wake** — Sleeping balls skip physics; wake when hit by another ball.
+5. **Rendering** — Black background, 3px thick wall lines via triangulated geometry, pastel ball colors.
