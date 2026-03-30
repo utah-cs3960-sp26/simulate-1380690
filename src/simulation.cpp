@@ -292,6 +292,10 @@ void World::step(float dt) {
     const float fixed_dt = 1.0f / 120.0f;
     accumulator_ += dt;
 
+    // Cap accumulator to prevent spiral of death (max 8 substeps per frame)
+    float max_accum = fixed_dt * 8.0f;
+    if (accumulator_ > max_accum) accumulator_ = max_accum;
+
     while (accumulator_ >= fixed_dt) {
         accumulator_ -= fixed_dt;
 
