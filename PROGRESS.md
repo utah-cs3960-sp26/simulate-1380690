@@ -71,3 +71,21 @@
 - End-to-end test of image reveal workflow
 - Extended runtime stress testing
 - Visual verification of sleep system behavior
+
+## Session 4 — Stability & Performance Fixes
+
+### Problems Fixed
+- **Spatial hash rebuilt every solver iteration**: Now only rebuilt once per substep (first iteration), reducing rebuild cost by 8x
+- **Sleep system wake bugs**: Fixed ball-wall wake logic — only wakes sleeping balls on significant incoming velocity (>2.0 units/s), not on micro-penetrations from gravity settling
+- **Ball-ball sleep instability**: Skip positional correction for both-sleeping pairs (stable stacks), don't apply impulse to sleeping balls, use wake threshold for ball-ball collisions
+- **Wall collision restitution**: Applied restitution cutoff consistently in degenerate (dist < epsilon) wall collision branch
+- **Accumulator spiral of death**: Capped accumulator to max 8 substeps per frame to prevent lag cascade
+- **Auto-save initial.csv**: Default scene now auto-saves initial.csv on startup for image reveal workflow
+
+### Added
+- Sleeping ball count displayed in HUD
+
+### Tested
+- Compiles cleanly with no errors
+- Runs for 5+ seconds without crashing
+- initial.csv auto-generated on default scene startup
