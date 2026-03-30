@@ -82,4 +82,5 @@ private:
 
     // Cached collision pairs from broad phase
     std::vector<std::pair<int,int>> pairs_;
+    void collect_pairs();
 };

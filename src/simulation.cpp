@@ -313,6 +313,56 @@ void World::build_spatial_hash() {
     }
 }
 
+void World::collect_pairs() {
+    pairs_.clear();
+
+    // Use a generation-based dedup: encode pair as int64 and use a flat set
+    // For 1000 balls, using sorted pair as key
+    // Simple approach: iterate grid, collect candidate pairs, sort & unique
+    for (int cy = 0; cy < grid_rows_; ++cy) {
+        for (int cx = 0; cx < grid_cols_; ++cx) {
+            int cell_idx = cy * grid_cols_ + cx;
+            int cell_start = grid_starts_[cell_idx];
+            int cell_count = grid_starts_[cell_idx + 1] - cell_start;
+            if (cell_count == 0) continue;
+            int* cell_data = &grid_data_[cell_start];
+
+            // Intra-cell pairs
+            for (int i = 0; i < cell_count; ++i) {
+                for (int j = i + 1; j < cell_count; ++j) {
+                    int ai = cell_data[i], bi = cell_data[j];
+                    if (ai > bi) std::swap(ai, bi);
+                    pairs_.push_back({ai, bi});
+                }
+            }
+
+            // Neighbor-cell pairs (4 forward neighbors to avoid double-counting)
+            static constexpr int neighbors[][2] = {{1,0},{0,1},{1,1},{-1,1}};
+            for (auto& nb : neighbors) {
+                int nx = cx + nb[0], ny = cy + nb[1];
+                if (nx < 0 || nx >= grid_cols_ || ny < 0 || ny >= grid_rows_) continue;
+                int nidx = ny * grid_cols_ + nx;
+                int nstart = grid_starts_[nidx];
+                int ncount = grid_starts_[nidx + 1] - nstart;
+                if (ncount == 0) continue;
+                int* ncell_data = &grid_data_[nstart];
+                for (int i = 0; i < cell_count; ++i) {
+                    for (int j = 0; j < ncount; ++j) {
+                        int ai = cell_data[i], bi = ncell_data[j];
+                        if (ai == bi) continue;
+                        if (ai > bi) std::swap(ai, bi);
+                        pairs_.push_back({ai, bi});
+                    }
+                }
+            }
+        }
+    }
+
+    // Remove duplicate pairs
+    std::sort(pairs_.begin(), pairs_.end());
+    pairs_.erase(std::unique(pairs_.begin(), pairs_.end()), pairs_.end());
+}
+
 void World::step(float dt) {
     if (paused) return;
 
@@ -335,47 +385,18 @@ void World::step(float dt) {
             b.pos += b.vel * fixed_dt;
         }
 
+        // Build spatial hash once per substep and collect unique pairs
+        build_spatial_hash();
+        collect_pairs();
+
         // Solver iterations
         for (int iter = 0; iter < solver_iterations; ++iter) {
             for (auto& b : balls) {
                 resolve_ball_wall(b);
             }
 
-            // Only rebuild spatial hash once per substep (first iteration),
-            // positions don't change much between solver iterations
-            if (iter == 0) build_spatial_hash();
-
-            for (int cy = 0; cy < grid_rows_; ++cy) {
-                for (int cx = 0; cx < grid_cols_; ++cx) {
-                    int cell_start = grid_starts_[cy * grid_cols_ + cx];
-                    int cell_count = grid_starts_[cy * grid_cols_ + cx + 1] - cell_start;
-                    if (cell_count == 0) continue;
-                    int* cell_data = &grid_data_[cell_start];
-
-                    for (int i = 0; i < cell_count; ++i) {
-                        for (int j = i + 1; j < cell_count; ++j) {
-                            resolve_ball_ball(balls[cell_data[i]], balls[cell_data[j]]);
-                        }
-                    }
-                    static constexpr int neighbors[][2] = {{1,0},{0,1},{1,1},{-1,1}};
-                    for (auto& nb : neighbors) {
-                        int nx = cx + nb[0], ny = cy + nb[1];
-                        if (nx < 0 || nx >= grid_cols_ || ny < 0 || ny >= grid_rows_) continue;
-                        int nstart = grid_starts_[ny * grid_cols_ + nx];
-                        int ncount = grid_starts_[ny * grid_cols_ + nx + 1] - nstart;
-                        if (ncount == 0) continue;
-                        int* ncell_data = &grid_data_[nstart];
-                        for (int i = 0; i < cell_count; ++i) {
-                            for (int j = 0; j < ncount; ++j) {
-                                int ai = cell_data[i], bi = ncell_data[j];
-                                if (ai < bi)
-                                    resolve_ball_ball(balls[ai], balls[bi]);
-                                else if (bi < ai)
-                                    resolve_ball_ball(balls[bi], balls[ai]);
-                            }
-                        }
-                    }
-                }
+            for (auto& [ai, bi] : pairs_) {
+                resolve_ball_ball(balls[ai], balls[bi]);
             }
         }
 
