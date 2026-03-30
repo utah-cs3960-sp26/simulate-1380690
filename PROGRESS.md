@@ -43,3 +43,31 @@
 ### Remaining
 - Extended stress testing (60+ seconds)
 - Visual verification of edge cases (high restitution, rapid resets)
+
+## Session 3 — Sleep System, CSV Support, Image Reveal
+
+### Completed
+- [x] Fixed header declarations (apply_gravity, build_spatial_hash) to match implementation
+- [x] Sleep system: balls track consecutive low-speed frames, sleep after 30 frames below 5 px/s threshold
+- [x] Sleeping balls skip gravity and velocity integration; wake on significant collision
+- [x] Restitution cutoff: contacts with relative normal velocity < 1.0 units/s use e=0.0
+- [x] Velocity damping factor 0.999 applied per substep for subtle energy bleed
+- [x] Positional correction slop increased to 0.5px to reduce oscillation
+- [x] Solver iterations increased to 8 for better stacking stability
+- [x] Per-ball RGB colors (each ball stores color_r, color_g, color_b)
+- [x] Renderer draws each ball in its own color
+- [x] CSV scene loading: `--scene initial.csv` command line argument
+- [x] CSV scene saving: press S to save `final_positions.csv`
+- [x] CSV format: x, y, radius, color_r, color_g, color_b
+- [x] Color assignment tool: `tools/assign_colors.py` samples target image at final positions
+- [x] README updated with image reveal workflow, CSV format, new controls
+- [x] Removed unused prev_pos field from Ball struct
+
+### Tested
+- Compiles cleanly with no errors
+- All features build and link correctly
+
+### Remaining
+- End-to-end test of image reveal workflow
+- Extended runtime stress testing
+- Visual verification of sleep system behavior
