@@ -42,12 +42,12 @@ void World::init(int width, int height) {
     walls.push_back({{left, top}, {left, bottom}, {1, 0}});
     walls.push_back({{right, top}, {right, bottom}, {-1, 0}});
 
-    // Funnel: two angled walls in the upper-middle area
+    // Funnel: two angled walls in the middle area (lowered to allow more spawn space)
     float cx = width / 2.0f;
-    float funnel_top = height * 0.35f;
+    float funnel_top = height * 0.55f;
     float funnel_gap = 60.0f;
-    walls.push_back({{left + 40, funnel_top - 80}, {cx - funnel_gap, funnel_top}, {}});
-    walls.push_back({{right - 40, funnel_top - 80}, {cx + funnel_gap, funnel_top}, {}});
+    walls.push_back({{left + 40, funnel_top - 100}, {cx - funnel_gap, funnel_top}, {}});
+    walls.push_back({{right - 40, funnel_top - 100}, {cx + funnel_gap, funnel_top}, {}});
 
     // Recompute wall normals (perpendicular to wall, pointing toward screen center)
     for (auto& w : walls) {
@@ -66,12 +66,12 @@ void World::init(int width, int height) {
     std::uniform_int_distribution<int> color_dist(80, 255);
 
     const float max_r = 6.0f;
-    const float spacing = 2.0f * max_r + 2.0f; // 14px, no initial overlap
-    float spawn_top = top + max_r + 4.0f;
-    float funnel_highest = funnel_top - 80.0f; // highest point of funnel walls
-    float spawn_bottom = funnel_highest - max_r - 4.0f;
-    float spawn_left = left + max_r + 4.0f;
-    float spawn_right = right - max_r - 4.0f;
+    const float spacing = 2.0f * max_r + 1.0f; // 13px, tight but no overlap
+    float spawn_top = top + max_r + 2.0f;
+    float funnel_highest = funnel_top - 100.0f; // highest point of funnel walls
+    float spawn_bottom = funnel_highest - max_r - 2.0f;
+    float spawn_left = left + max_r + 2.0f;
+    float spawn_right = right - max_r - 2.0f;
 
     int cols = std::max(1, (int)((spawn_right - spawn_left) / spacing));
     int max_rows = std::max(1, (int)((spawn_bottom - spawn_top) / spacing));
@@ -116,10 +116,10 @@ void World::init_from_csv(const std::string& filename, int width, int height) {
     walls.push_back({{right, top}, {right, bottom}, {-1, 0}});
 
     float cx = width / 2.0f;
-    float funnel_top = height * 0.35f;
+    float funnel_top = height * 0.55f;
     float funnel_gap = 60.0f;
-    walls.push_back({{left + 40, funnel_top - 80}, {cx - funnel_gap, funnel_top}, {}});
-    walls.push_back({{right - 40, funnel_top - 80}, {cx + funnel_gap, funnel_top}, {}});
+    walls.push_back({{left + 40, funnel_top - 100}, {cx - funnel_gap, funnel_top}, {}});
+    walls.push_back({{right - 40, funnel_top - 100}, {cx + funnel_gap, funnel_top}, {}});
 
     for (auto& w : walls) {
         Vec2 edge = w.b - w.a;
