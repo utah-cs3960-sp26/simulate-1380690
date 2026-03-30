@@ -35,17 +35,18 @@ mkdir -p build && cd build && cmake .. && make -j$(sysctl -n hw.logicalcpu)
 
 - **1000 balls** with varying radii (4–6 px), mass proportional to area
 - **Per-ball RGB colors** — each ball has its own color
-- **Gravity** at 1200 px/s²
+- **Gravity** at 2200 px/s²
 - **Configurable restitution** (0.0 = inelastic, 1.0 = elastic), default 0.5
-- **Rectangular container** with 4 walls plus an interior funnel
+- **Rectangular container** with 4 walls plus an interior funnel (80px opening)
 - **Spatial hash grid** for O(n) broad-phase collision detection
-- **Fixed timestep** (1/120s) with accumulator for frame-rate independence
-- **10 solver iterations** per substep for stable stacking
+- **Fixed timestep** (1/180s) with accumulator for frame-rate independence
+- **12 solver iterations** per substep for stable stacking
 - **Swept wall collision detection** — prevents tunneling through walls using prev_pos tracking
-- **Contact-based sleep system** — balls must be in contact and slow for 120 frames to sleep; wake on loss of contact
-- **Restitution cutoff** — low-velocity contacts (< 2 units/s) treated as inelastic
-- **Positional correction** — full push-out for wall collisions, slop-based for ball-ball
-- **Velocity damping** (0.9995 factor) — very subtle energy bleed for settling
+- **Hysteretic sleep system** — balls must be in contact and slow for 60 frames to sleep; require 3 consecutive unsupported substeps to wake
+- **Restitution cutoff** — dynamic threshold based on gravity×dt, low-velocity contacts treated as inelastic
+- **Positional correction** — tight push-out for walls (0.05px slop), 60% correction for ball-ball (0.2px slop)
+- **Ball-ball tangential friction** — dissipates lateral/rotational energy to prevent vortex circulation
+- **Velocity damping** (0.9998 factor) — very subtle energy bleed for settling
 - **CSV scene load/save** — load initial positions from CSV, save final positions
 - **HUD** showing FPS, ball count, restitution value, sleeping count, and pause state
 
@@ -78,8 +79,9 @@ Example: `512, 100, 5, 255, 0, 128`
 ## Design Notes
 
 - Physics uses a semi-implicit Euler integrator: gravity → velocity, then velocity → position, then constraint solving
-- Collision resolution is iterative (8 passes) to handle stacking and clusters
+- Collision resolution is iterative (12 passes) to handle stacking and clusters
 - Spatial hash uses a flat 2D grid with cell size 20px, checking each cell against its 4 forward neighbors
-- Sleep system: contact-based — balls must be touching a wall or another ball AND moving below 3 px/s for 120 consecutive frames to sleep. Sleeping balls wake up if they lose contact support.
+- Sleep system: hysteretic — balls must be in contact AND below 12 px/s for 60 substeps to sleep. Waking requires 3 consecutive unsupported substeps, preventing noise-triggered wake.
 - Swept wall collision: tracks prev_pos to detect wall crossings even if ball moves fast enough to skip past a wall in one substep.
-- Restitution cutoff at 2.0 units/s kills micro-bounces at rest without affecting real bounces
+- Dynamic restitution cutoff: max(20, 2×gravity×dt) ensures resting contacts always use e=0 regardless of gravity tuning
+- Ball-ball tangential friction (0.02) dissipates lateral circulation energy to prevent vortex behavior in dense piles

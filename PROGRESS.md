@@ -164,3 +164,33 @@
 - Compiles cleanly with no errors
 - Runs for 15+ seconds without crashing
 - 1000 balls generated and auto-saved correctly
+
+## Session 8 — Major Physics Overhaul
+
+### Root Causes Identified & Fixed
+- **Rest vibration**: Ball-ball slop (0.75px) was too large relative to ball radius (4-6px), causing persistent overlap re-triggering. Reduced to 0.20px and raised correction to 60%.
+- **Sluggish falling**: Near-rest damping of 0.98/substep was obliterating velocity (0.98^120 ≈ 9% retained per second). Removed entirely. Global damping reduced from 0.9992 to 0.9998.
+- **Vortex behavior**: No tangential friction between balls allowed lateral circulation to persist indefinitely. Added ball-ball tangential friction (0.02). Also reduced funnel gap from 120px to 80px.
+- **Brittle sleep/wake**: Sleeping balls woke on a single substep without contact. Changed to hysteretic wake requiring 3 consecutive unsupported substeps.
+- **Wall correction inconsistency**: Deep penetration had a separate code path that fully corrected without slop. Unified to single path with tight 0.05px slop.
+
+### Tuning Changes
+- Gravity: 1800 → 2200 px/s²
+- Fixed timestep: 1/120s → 1/180s
+- Max substeps: 8 → 12
+- Solver iterations: 10 → 12
+- Sleep speed threshold: 8.0 → 12.0 px/s
+- Sleep frames required: 90 → 60
+- Damping: 0.9992 → 0.9998 (removed aggressive 0.98 near-rest branch)
+- Wall slop: 0.15 → 0.05px
+- Ball-ball slop: 0.75 → 0.20px
+- Ball-ball correction: 0.3 → 0.6
+- Wake speed threshold: 15 → 20
+- Funnel half-gap: 60 → 40 (total opening 80px)
+- Added ball-ball tangential friction: 0.02
+
+### Tested
+- Compiles cleanly with no errors
+- Runs for 60+ seconds without crashing
+- 1000 balls generated and auto-saved correctly
+- README.md updated with current values
