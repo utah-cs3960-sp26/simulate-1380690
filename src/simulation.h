@@ -40,7 +40,7 @@ struct Wall {
 struct World {
     std::vector<Ball> balls;
     std::vector<Wall> walls;
-    float gravity = 1200.0f;      // pixels/s^2
+    float gravity = 1800.0f;      // pixels/s^2
     float restitution = 0.5f;
     int solver_iterations = 10;
     bool paused = false;

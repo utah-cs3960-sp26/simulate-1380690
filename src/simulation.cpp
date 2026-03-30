@@ -19,11 +19,14 @@ static Vec2 closest_point_on_segment(Vec2 p, Vec2 a, Vec2 b) {
     return a + ab * t;
 }
 
-static constexpr float SLEEP_SPEED_THRESHOLD = 3.0f;
-static constexpr int SLEEP_FRAMES_REQUIRED = 120;
-static constexpr float DAMPING = 0.9995f;
-static constexpr float RESTITUTION_CUTOFF_VEL = 2.0f;
-static constexpr float WALL_FRICTION = 0.03f;
+static constexpr float SLEEP_SPEED_THRESHOLD = 8.0f;
+static constexpr int SLEEP_FRAMES_REQUIRED = 90;
+static constexpr float DAMPING = 0.9992f;
+static constexpr float WALL_FRICTION = 0.02f;
+static constexpr float WALL_SLOP = 0.15f;
+static constexpr float BALL_SLOP = 0.75f;
+static constexpr float BALL_CORRECTION_PCT = 0.3f;
+static constexpr float WAKE_SPEED_THRESHOLD = 15.0f;
 
 void World::init(int width, int height) {
     world_w = width;
@@ -184,6 +187,8 @@ void World::apply_gravity(float dt) {
 }
 
 void World::resolve_ball_wall(Ball& ball) {
+    float restitution_cutoff = std::max(20.0f, 2.0f * gravity * fixed_dt_);
+
     for (const auto& w : walls) {
         Vec2 edge = w.b - w.a;
         float edge_len2 = edge.length2();
@@ -193,22 +198,15 @@ void World::resolve_ball_wall(Ball& ball) {
         float t = clampf((ball.pos - w.a).dot(edge) / edge_len2, 0.0f, 1.0f);
         Vec2 cp = w.a + edge * t;
 
-        // Face normal from segment
-        Vec2 face_n = Vec2{-edge.y, edge.x}.normalized();
-
-        // Orient normal so it points toward the side the ball came from
-        if ((ball.prev_pos - w.a).dot(face_n) < 0.0f) {
-            face_n = face_n * -1.0f;
-        }
-
-        // Use face normal on segment interior, radial normal near endpoints
+        // Use stable precomputed wall normal for interior contacts,
+        // radial normal near endpoints
         Vec2 diff = ball.pos - cp;
         float diff_len = diff.length();
         Vec2 n;
         if (t > 1e-3f && t < 1.0f - 1e-3f) {
-            n = face_n;
+            n = w.normal;
         } else {
-            n = (diff_len > 1e-6f) ? diff * (1.0f / diff_len) : face_n;
+            n = (diff_len > 1e-6f) ? diff * (1.0f / diff_len) : w.normal;
         }
 
         float curr_sep = (ball.pos - cp).dot(n);
@@ -227,14 +225,19 @@ void World::resolve_ball_wall(Ball& ball) {
         float penetration = ball.radius - curr_sep;
         if (crossed && penetration < 0.0f) penetration = ball.radius;
 
-        // Full positional correction
-        ball.pos += n * (penetration + 0.01f);
+        // Positional correction with slop for deep penetrations, full for severe
+        if (penetration > 1.0f) {
+            ball.pos += n * penetration;
+        } else {
+            float correction = std::max(penetration - WALL_SLOP, 0.0f);
+            if (correction > 0.0f) ball.pos += n * correction;
+        }
 
         // Velocity reflection
         float vn = ball.vel.dot(n);
         if (vn < 0.0f) {
             if (ball.sleeping) {
-                if (std::abs(vn) > 5.0f) {
+                if (std::abs(vn) > WAKE_SPEED_THRESHOLD) {
                     ball.sleeping = false;
                     ball.sleep_counter = 0;
                 } else {
@@ -242,7 +245,7 @@ void World::resolve_ball_wall(Ball& ball) {
                     continue;
                 }
             }
-            float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
+            float e = (std::abs(vn) < restitution_cutoff) ? 0.0f : restitution;
             ball.vel -= n * (vn * (1.0f + e));
 
             // Small tangential friction
@@ -274,9 +277,8 @@ void World::resolve_ball_ball(Ball& a, Ball& b) {
             return;
         }
 
-        // Positional correction with small slop
-        float slop = 0.3f;
-        float correction = std::max(penetration - slop, 0.0f) * 0.6f;
+        // Positional correction with slop
+        float correction = std::max(penetration - BALL_SLOP, 0.0f) * BALL_CORRECTION_PCT;
         if (correction > 0.0f) {
             float total_mass = a.mass + b.mass;
             if (!a.sleeping) a.pos -= n * (correction * (b.mass / total_mass));
@@ -290,13 +292,13 @@ void World::resolve_ball_ball(Ball& a, Ball& b) {
         float rel_vn = (b.vel - a.vel).dot(n);
         if (rel_vn < 0) {
             // Wake sleeping balls only on significant collision
-            float wake_threshold = 5.0f;
-            if (std::abs(rel_vn) > wake_threshold) {
+            if (std::abs(rel_vn) > WAKE_SPEED_THRESHOLD) {
                 if (a.sleeping) { a.sleeping = false; a.sleep_counter = 0; }
                 if (b.sleeping) { b.sleeping = false; b.sleep_counter = 0; }
             }
 
-            float e = (std::abs(rel_vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
+            float restitution_cutoff = std::max(20.0f, 2.0f * gravity * fixed_dt_);
+            float e = (std::abs(rel_vn) < restitution_cutoff) ? 0.0f : restitution;
             float j = -(1.0f + e) * rel_vn / (1.0f / a.mass + 1.0f / b.mass);
             if (!a.sleeping) a.vel -= n * (j / a.mass);
             if (!b.sleeping) b.vel += n * (j / b.mass);
@@ -452,6 +454,7 @@ void World::step(float dt) {
                 if (b.sleep_counter >= SLEEP_FRAMES_REQUIRED) {
                     b.sleeping = true;
                     b.vel = {0, 0};
+                    b.prev_pos = b.pos;
                 }
             } else {
                 b.sleep_counter = 0;
