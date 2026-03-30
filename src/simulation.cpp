@@ -19,10 +19,10 @@ static Vec2 closest_point_on_segment(Vec2 p, Vec2 a, Vec2 b) {
     return a + ab * t;
 }
 
-static constexpr float SLEEP_SPEED_THRESHOLD = 5.0f;
-static constexpr int SLEEP_FRAMES_REQUIRED = 30;
-static constexpr float DAMPING = 0.999f;
-static constexpr float RESTITUTION_CUTOFF_VEL = 1.0f;
+static constexpr float SLEEP_SPEED_THRESHOLD = 8.0f;
+static constexpr int SLEEP_FRAMES_REQUIRED = 60;
+static constexpr float DAMPING = 0.998f;
+static constexpr float RESTITUTION_CUTOFF_VEL = 2.0f;
 
 void World::init(int width, int height) {
     world_w = width;
@@ -60,7 +60,7 @@ void World::init(int width, int height) {
 
     // Spawn ~1000 balls in a grid above the funnel
     std::mt19937 rng(42);
-    std::uniform_real_distribution<float> radius_dist(4.0f, 7.0f);
+    std::uniform_real_distribution<float> radius_dist(4.0f, 6.0f);
     std::uniform_real_distribution<float> jitter(-0.5f, 0.5f);
     std::uniform_int_distribution<int> color_dist(80, 255);
 
@@ -184,26 +184,41 @@ void World::resolve_ball_wall(Ball& ball) {
             Vec2 n = diff.normalized();
             float penetration = ball.radius - dist;
 
-            // Positional correction (even for sleeping balls to prevent tunneling)
-            ball.pos += n * penetration;
+            // Positional correction with slop
+            float slop = 0.3f;
+            float correction = std::max(penetration - slop, 0.0f) + std::min(penetration, slop) * 0.2f;
+            ball.pos += n * correction;
 
             // Velocity reflection
             float vn = ball.vel.dot(n);
             if (vn < 0) {
-                // Only wake sleeping ball on significant incoming velocity
-                if (ball.sleeping && std::abs(vn) > 2.0f) {
-                    ball.sleeping = false;
-                    ball.sleep_counter = 0;
+                if (ball.sleeping) {
+                    // Only wake on significant incoming velocity (not gravity settling)
+                    if (std::abs(vn) > 5.0f) {
+                        ball.sleeping = false;
+                        ball.sleep_counter = 0;
+                    } else {
+                        // Just zero out the penetrating velocity component
+                        ball.vel -= n * vn;
+                        continue;
+                    }
                 }
-                if (!ball.sleeping) {
-                    float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
-                    ball.vel -= n * (vn * (1.0f + e));
-                }
+                float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
+                ball.vel -= n * (vn * (1.0f + e));
+
+                // Tangential friction to help settling
+                Vec2 tangent_vel = ball.vel - n * ball.vel.dot(n);
+                float friction = 0.3f;
+                ball.vel -= tangent_vel * friction;
             }
         } else if (dist < 1e-6f) {
             ball.pos += w.normal * ball.radius;
             float vn = ball.vel.dot(w.normal);
-            if (vn < 0 && !ball.sleeping) {
+            if (vn < 0) {
+                if (ball.sleeping) {
+                    ball.vel -= w.normal * vn;
+                    continue;
+                }
                 float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
                 ball.vel -= w.normal * (vn * (1.0f + e));
             }
@@ -220,23 +235,31 @@ void World::resolve_ball_ball(Ball& a, Ball& b) {
         Vec2 n = diff * (1.0f / dist);
         float penetration = min_dist - dist;
 
-        // Positional correction with slop
-        float slop = 0.5f;
-        float correction = std::max(penetration - slop, 0.0f);
-        if (correction > 0.0f) {
-            float total_mass = a.mass + b.mass;
-            // If both sleeping, don't apply positional correction (stable stack)
-            if (!(a.sleeping && b.sleeping)) {
+        // If both sleeping, only apply gentle positional correction if deep overlap
+        if (a.sleeping && b.sleeping) {
+            if (penetration > 1.0f) {
+                float total_mass = a.mass + b.mass;
+                float correction = penetration * 0.1f;
                 a.pos -= n * (correction * (b.mass / total_mass));
                 b.pos += n * (correction * (a.mass / total_mass));
             }
+            return;
+        }
+
+        // Positional correction with slop
+        float slop = 0.5f;
+        float correction = std::max(penetration - slop, 0.0f) * 0.4f;
+        if (correction > 0.0f) {
+            float total_mass = a.mass + b.mass;
+            if (!a.sleeping) a.pos -= n * (correction * (b.mass / total_mass));
+            if (!b.sleeping) b.pos += n * (correction * (a.mass / total_mass));
         }
 
         // Velocity response
         float rel_vn = (b.vel - a.vel).dot(n);
         if (rel_vn < 0) {
-            // Only wake sleeping balls on significant approaching velocity
-            float wake_threshold = 2.0f;
+            // Wake sleeping balls only on significant collision
+            float wake_threshold = 5.0f;
             if (std::abs(rel_vn) > wake_threshold) {
                 if (a.sleeping) { a.sleeping = false; a.sleep_counter = 0; }
                 if (b.sleeping) { b.sleeping = false; b.sleep_counter = 0; }
@@ -358,16 +381,21 @@ void World::step(float dt) {
 
         // Sleep system: track how long balls have been slow
         for (auto& b : balls) {
+            if (b.sleeping) continue;
             float speed = b.vel.length();
             if (speed < SLEEP_SPEED_THRESHOLD) {
                 b.sleep_counter++;
+                // Progressive damping as ball approaches sleep
+                float progress = (float)b.sleep_counter / (float)SLEEP_FRAMES_REQUIRED;
+                float extra_damp = 1.0f - progress * 0.05f; // ramps from 1.0 to 0.95
+                b.vel = b.vel * extra_damp;
+
                 if (b.sleep_counter >= SLEEP_FRAMES_REQUIRED) {
                     b.sleeping = true;
                     b.vel = {0, 0};
                 }
             } else {
                 b.sleep_counter = 0;
-                b.sleeping = false;
             }
         }
     }

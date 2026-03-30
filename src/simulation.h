@@ -40,7 +40,7 @@ struct World {
     std::vector<Wall> walls;
     float gravity = 1200.0f;      // pixels/s^2
     float restitution = 0.5f;
-    int solver_iterations = 8;
+    int solver_iterations = 10;
     bool paused = false;
 
     float interpolation_alpha() const { return accumulator_ / fixed_dt_; }
@@ -65,7 +65,7 @@ struct World {
 
 private:
     static constexpr float fixed_dt_ = 1.0f / 120.0f;
-    static constexpr int max_substeps_ = 4;
+    static constexpr int max_substeps_ = 8;
 
     int world_w = 0, world_h = 0;
     float accumulator_ = 0.0f;
