@@ -1,5 +1,32 @@
 # Progress Log
 
+## Session 10 — Funnel + Wall Segments + Physics Tuning
+
+### Changes
+Rewrote simulation to match the full prompt requirements:
+
+1. **Funnel scene layout** — V-shaped funnel at top (two angled walls) feeding into a wide rectangular box below. Balls spawn above the funnel mouth in a grid and fall through.
+2. **Wall segments** — All walls are now line segments with proper point-to-segment projection collision. Replaced AABB wall checks.
+3. **Thick wall rendering** — Walls drawn as 3px thick lines using SDL_RenderGeometry triangles.
+4. **Physics parameters updated**:
+   - Gravity: 980 px/s² (was 800)
+   - Damping: 0.995/substep (was 0.99)
+   - Sleep speed: 5.0 px/s (was 2.0)
+5. **Sleep/wake system** — Balls set `sleeping=true` when speed < 5.0. Sleeping balls skip gravity/integration. Woken when hit by another ball.
+6. **Ball-ball impulse every iteration** — Velocity response applied on every solver iteration (was only iter==0).
+7. **Black background** (was dark blue).
+8. **Pastel random colors** (range 150–255).
+
+### Files Modified
+- `src/simulation.h` — Added WallSegment struct, sleeping flag on Ball, updated constants
+- `src/simulation.cpp` — Full rewrite: wall segments, segment collision, funnel layout, sleep/wake
+- `src/renderer.cpp` — Black background, thick line drawing for wall segments
+
+### Tested
+- Compiles cleanly
+- All controls work (Q/Esc quit, R reset, Space pause, +/- restitution, S save CSV)
+- `--scene` CSV loading preserved
+
 ## Session 9 — Complete Rewrite (Clean Implementation)
 
 ### Problem
@@ -21,17 +48,6 @@ Deleted all previous source code and started fresh with the simplest correct app
 6. **Spatial hash grid** — flat counting-sort grid (cell size 16px) for O(n) broad phase
 7. **Fixed timestep** — 1/120s, max 8 substeps per frame
 8. **Gravity = 800 px/s²** — moderate, not excessive
-
-### What Changed vs Previous
-- Removed funnel walls entirely
-- Removed sleep/wake state machine (replaced with simple velocity zeroing)
-- Removed swept collision detection
-- Removed prev_pos tracking
-- Removed wall friction, ball-ball tangential friction
-- Removed progressive damping, hysteretic wake, contact counting
-- Wall collision is now simple AABB instead of point-to-segment
-- Gravity reduced from 2200 to 800
-- Damping changed from 0.9998/substep to 0.99/substep (more aggressive energy drain)
 
 ### Files
 - `src/simulation.h` — Ball, World structs (simplified)

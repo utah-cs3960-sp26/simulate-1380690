@@ -33,20 +33,35 @@ void Renderer::shutdown() {
     SDL_Quit();
 }
 
+static void draw_thick_line(SDL_Renderer* r, float x1, float y1, float x2, float y2, float thickness) {
+    float dx = x2 - x1;
+    float dy = y2 - y1;
+    float len = std::sqrt(dx * dx + dy * dy);
+    if (len < 1e-6f) return;
+    float nx = -dy / len * thickness * 0.5f;
+    float ny = dx / len * thickness * 0.5f;
+
+    SDL_Vertex verts[4];
+    SDL_FColor color = {0.78f, 0.78f, 0.78f, 1.0f};  // light gray
+    verts[0] = {{x1 + nx, y1 + ny}, color, {0, 0}};
+    verts[1] = {{x1 - nx, y1 - ny}, color, {0, 0}};
+    verts[2] = {{x2 - nx, y2 - ny}, color, {0, 0}};
+    verts[3] = {{x2 + nx, y2 + ny}, color, {0, 0}};
+
+    int indices[6] = {0, 1, 2, 0, 2, 3};
+    SDL_RenderGeometry(r, nullptr, verts, 4, indices, 6);
+}
+
 void Renderer::draw(const World& world, float fps) {
-    SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    // Draw container walls
-    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-    SDL_FRect wall_rect = {
-        world.wall_left, world.wall_top,
-        world.wall_right - world.wall_left,
-        world.wall_bottom - world.wall_top
-    };
-    SDL_RenderRect(renderer, &wall_rect);
+    // Draw wall segments (thick lines, 3px)
+    for (auto& wall : world.walls) {
+        draw_thick_line(renderer, wall.a.x, wall.a.y, wall.b.x, wall.b.y, 3.0f);
+    }
 
-    // Draw balls — batch rects by color
+    // Draw balls as filled circles
     circle_rects_.clear();
     circle_rects_.reserve(world.balls.size() * 12);
 

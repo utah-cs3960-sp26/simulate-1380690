@@ -25,16 +25,19 @@ struct Ball {
     Vec2 vel;
     float radius;
     float mass;
-    uint8_t color_r = 77, color_g = 153, color_b = 255;
+    bool sleeping = false;
+    uint8_t color_r = 255, color_g = 255, color_b = 255;
+};
+
+struct WallSegment {
+    Vec2 a, b;
 };
 
 struct World {
     std::vector<Ball> balls;
+    std::vector<WallSegment> walls;
     float restitution = 0.5f;
     bool paused = false;
-
-    // Container bounds
-    float wall_left, wall_right, wall_top, wall_bottom;
 
     void init(int width, int height);
     void init_from_csv(const std::string& filename, int width, int height);
@@ -42,12 +45,12 @@ struct World {
     void step(float dt);
 
 private:
-    static constexpr float GRAVITY = 800.0f;
+    static constexpr float GRAVITY = 980.0f;
     static constexpr float fixed_dt_ = 1.0f / 120.0f;
     static constexpr int MAX_SUBSTEPS = 8;
     static constexpr int SOLVER_ITERATIONS = 10;
-    static constexpr float DAMPING = 0.99f;
-    static constexpr float SLEEP_SPEED = 2.0f;
+    static constexpr float DAMPING = 0.995f;
+    static constexpr float SLEEP_SPEED = 5.0f;
     static constexpr float REST_VELOCITY_CUTOFF = 1.0f;
     static constexpr float CELL_SIZE = 16.0f;
 

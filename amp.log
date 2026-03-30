@@ -432,3 +432,12 @@ All fixes are committed. Here's a summary of what was done:
 3. **Vortex/never-settling** — No ball-ball tangential friction let lateral circulation persist forever. Added 0.02 friction factor. Funnel opening reduced from 120px→80px.
 
 Additional: timestep tightened to 1/180s, solver iterations raised to 12, all passing 60-second stress test.
+Everything is in place. The complete rewrite is done:
+
+- **Removed all complexity**: no funnel, no sleep/wake state machine, no swept detection, no prev_pos, no friction systems
+- **Simple physics**: gravity → damping → move → 10 iterations of (wall push-out + ball-ball push-apart with impulse) → zero velocity if speed < 2.0
+- **Simple walls**: axis-aligned AABB checks against 4 container edges
+- **Low-velocity cutoff**: relative velocity < 1.0 at contact → restitution = 0 (prevents endless micro-bouncing)
+- **Aggressive damping**: 0.99 per substep ensures energy bleeds out quickly
+
+Run `./physics_sim` from the `build/` directory to test. Balls should fall, bounce, and settle at the bottom without vortexing.
