@@ -72,6 +72,29 @@
 - Extended runtime stress testing
 - Visual verification of sleep system behavior
 
+## Session 6 — Critical Bug Fixes
+
+### Problems Fixed
+- **Balls passing through walls**: Replaced discrete-only overlap check with swept collision detection using `prev_pos`. Now detects wall crossings even when balls move fast enough to skip past in one substep. Full positional correction (no partial slop) for wall collisions.
+- **Not all balls dropping**: Balls were being spawned below the funnel (grid filled entire container). Fixed spawn to only place balls ABOVE the funnel walls. Lowered funnel to 55% height and extended funnel arms to create more spawn area, fitting all 1000 balls.
+- **Balls don't fall naturally**: Reduced damping from 0.998 to 0.9995 (much less drag). Reduced wall friction from 0.3 to 0.03. Removed progressive damping before sleep. Made sleep contact-based (must be touching something AND moving slowly for 120 frames). Removed over-aggressive sleep waking.
+- **Wall normal robustness**: Wall collision now derives face normal from segment geometry and orients it based on `prev_pos` side, rather than relying solely on precomputed normals.
+
+### Tuning Changes
+- Funnel position: 35% → 55% of window height
+- Funnel arm length: 80px → 100px
+- Ball spacing: 14px → 13px
+- Sleep threshold: 8.0 → 3.0 px/s
+- Sleep frames: 60 → 120
+- Damping: 0.998 → 0.9995
+- Wall friction: 0.3 → 0.03
+- Ball-ball positional correction: 0.4 → 0.6
+
+### Tested
+- Compiles cleanly with no errors
+- 1000 balls spawned correctly above funnel
+- Runs for 3+ seconds without crashing
+
 ## Session 4 — Stability & Performance Fixes
 
 ### Problems Fixed

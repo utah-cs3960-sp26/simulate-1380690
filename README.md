@@ -33,20 +33,21 @@ mkdir -p build && cd build && cmake .. && make -j$(sysctl -n hw.logicalcpu)
 
 ## Features
 
-- **1000 balls** with varying radii (4–8 px), mass proportional to area
+- **1000 balls** with varying radii (4–6 px), mass proportional to area
 - **Per-ball RGB colors** — each ball has its own color
 - **Gravity** at 1200 px/s²
 - **Configurable restitution** (0.0 = inelastic, 1.0 = elastic), default 0.5
 - **Rectangular container** with 4 walls plus an interior funnel
 - **Spatial hash grid** for O(n) broad-phase collision detection
 - **Fixed timestep** (1/120s) with accumulator for frame-rate independence
-- **8 solver iterations** per substep for stable stacking
-- **Sleep system** — balls that stay below velocity threshold for 30 frames stop updating
-- **Restitution cutoff** — low-velocity contacts (< 1 unit/s) treated as inelastic
-- **Positional correction with slop** (0.5px) — prevents tunneling while allowing stable rest
-- **Velocity damping** (0.999 factor) — subtle energy bleed for settling
+- **10 solver iterations** per substep for stable stacking
+- **Swept wall collision detection** — prevents tunneling through walls using prev_pos tracking
+- **Contact-based sleep system** — balls must be in contact and slow for 120 frames to sleep; wake on loss of contact
+- **Restitution cutoff** — low-velocity contacts (< 2 units/s) treated as inelastic
+- **Positional correction** — full push-out for wall collisions, slop-based for ball-ball
+- **Velocity damping** (0.9995 factor) — very subtle energy bleed for settling
 - **CSV scene load/save** — load initial positions from CSV, save final positions
-- **HUD** showing FPS, ball count, restitution value, and pause state
+- **HUD** showing FPS, ball count, restitution value, sleeping count, and pause state
 
 ## Image Reveal Workflow
 
@@ -79,5 +80,6 @@ Example: `512, 100, 5, 255, 0, 128`
 - Physics uses a semi-implicit Euler integrator: gravity → velocity, then velocity → position, then constraint solving
 - Collision resolution is iterative (8 passes) to handle stacking and clusters
 - Spatial hash uses a flat 2D grid with cell size 20px, checking each cell against its 4 forward neighbors
-- Sleep system: balls track consecutive low-speed frames; after 30 frames below 5 px/s, ball sleeps (no gravity/velocity updates). Wakes on significant collision.
-- Restitution cutoff at 1.0 units/s kills micro-bounces at rest without affecting real bounces
+- Sleep system: contact-based — balls must be touching a wall or another ball AND moving below 3 px/s for 120 consecutive frames to sleep. Sleeping balls wake up if they lose contact support.
+- Swept wall collision: tracks prev_pos to detect wall crossings even if ball moves fast enough to skip past a wall in one substep.
+- Restitution cutoff at 2.0 units/s kills micro-bounces at rest without affecting real bounces
