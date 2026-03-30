@@ -232,16 +232,14 @@ void World::resolve_ball_ball(Ball& a, Ball& b) {
         // Velocity response
         float rel_vn = (b.vel - a.vel).dot(n);
         if (rel_vn < 0) {
+            // Wake any sleeping ball involved in a collision with approaching velocity
+            if (a.sleeping) { a.sleeping = false; a.sleep_counter = 0; }
+            if (b.sleeping) { b.sleeping = false; b.sleep_counter = 0; }
+
             float e = (std::abs(rel_vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
             float j = -(1.0f + e) * rel_vn / (1.0f / a.mass + 1.0f / b.mass);
             a.vel -= n * (j / a.mass);
             b.vel += n * (j / b.mass);
-
-            // Wake sleeping balls on significant collision
-            if (std::abs(rel_vn) > SLEEP_SPEED_THRESHOLD) {
-                a.sleeping = false; a.sleep_counter = 0;
-                b.sleeping = false; b.sleep_counter = 0;
-            }
         }
     }
 }
