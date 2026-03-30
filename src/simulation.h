@@ -63,9 +63,10 @@ private:
 
     int world_w = 0, world_h = 0;
     float accumulator_ = 0.0f;
+    void apply_gravity(float dt);
     void resolve_ball_wall(Ball& ball);
     void resolve_ball_ball(Ball& a, Ball& b);
-    void build_broadphase();
+    void build_spatial_hash();
 
     // Flat spatial hash grid (counting sort, center-cell only)
     std::vector<int> grid_counts_;
