@@ -137,3 +137,30 @@
 - Compiles cleanly with no errors
 - Runs for 15+ seconds without crashing
 - 1000 balls generated, initial.csv auto-saved correctly
+
+## Session 7 — Rest Vibration Fix & Performance Tuning
+
+### Problems Fixed
+- **Root cause of rest vibration identified and fixed**: Restitution cutoff (2.0) was far below gravity-per-substep velocity (~15 px/s at 1800 gravity). Balls at rest would accumulate gravity velocity, exceed the cutoff, bounce with restitution, and never settle. Now uses dynamic cutoff: `max(20, 2 * gravity * dt)` = 30, ensuring resting contacts always use e=0.
+- **Wall normal instability**: Replaced `prev_pos`-based normal orientation with stable precomputed `w.normal`. Eliminates normal flipping at wall endpoints that caused oscillation.
+- **Over-aggressive wall correction**: Replaced `penetration + 0.01` with slop-based correction (0.15px slop). Full correction only for deep penetrations >1px.
+- **Ball-ball correction too eager**: Increased slop to 0.75px, reduced correction factor to 0.3 (from 0.6). Prevents dense pile buzzing with 10 solver iterations.
+- **Sluggish gravity feel**: Raised gravity from 1200 to 1800 px/s² for more natural falling speed.
+- **Progressive damping**: Near-rest balls (speed < 2× sleep threshold, with sleep_counter > 0) get stronger damping (0.98 vs 0.9992) to converge faster.
+- **Sleep wake threshold unified**: Use WAKE_SPEED_THRESHOLD=15 consistently for wall and ball-ball wake checks.
+
+### Tuning Changes
+- Gravity: 1200 → 1800 px/s²
+- Restitution cutoff: 2.0 (static) → max(20, 2*gravity*dt) (dynamic, ~30)
+- Sleep speed threshold: 3.0 → 8.0 px/s
+- Sleep frames required: 120 → 90
+- Damping: 0.9995 → 0.9992 (global), 0.98 (near-rest progressive)
+- Wall slop: 0 → 0.15px
+- Ball-ball slop: 0.3 → 0.75px
+- Ball-ball correction: 0.6 → 0.3
+- Wake threshold: 5.0 → 15.0
+
+### Tested
+- Compiles cleanly with no errors
+- Runs for 15+ seconds without crashing
+- 1000 balls generated and auto-saved correctly
