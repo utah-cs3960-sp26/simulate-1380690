@@ -383,3 +383,13 @@ All done. Here's a summary of what was implemented:
 - **CSV save**: Press `S` to write `final_positions.csv`
 - **Color assignment tool**: `python3 tools/assign_colors.py initial.csv final_positions.csv image.png output.csv`
 - **Image reveal workflow** documented in README
+All changes have been pushed. Here's a summary of what was done:
+
+**Session 4 fixes:**
+1. **Spatial hash optimization** — Only rebuild once per substep instead of per solver iteration (8x fewer rebuilds)
+2. **Sleep system wake fixes** — Balls only wake on significant velocity (>2.0 units/s), not micro-penetrations from gravity
+3. **Stable stacking** — Both-sleeping pairs skip positional correction; impulse not applied to sleeping balls
+4. **Restitution cutoff consistency** — Applied to all wall collision branches
+5. **Accumulator cap** — Max 8 substeps/frame prevents spiral of death
+6. **HUD** — Shows sleeping ball count
+7. **Auto-save** — `initial.csv` generated on default scene for image reveal workflow

@@ -139,6 +139,7 @@ Current Issues (fix these first)
 
 Balls vibrate at rest — balls that should be settled keep jittering and wiggling. Implement the sleep system and restitution cutoff described above.
 Simulation runs too slow — balls move sluggishly, not at real-time speed. Fix delta time scaling.
+The balls MUST come to a rest at the end.
 Animation is choppy — target 60 fps with spatial hash grid for collision detection.
 
 Performance Fixes Needed
