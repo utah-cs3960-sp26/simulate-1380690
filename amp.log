@@ -404,3 +404,8 @@ All changes pushed. Here's a summary of what was done this session:
 5. **Unique pair dedup**: Refactored solver to collect+sort+unique pairs before iteration, preventing duplicate resolutions
 6. **Renderer batching**: Circle rects batched by color with pre-reserved capacity
 7. **Tuning**: Increased sleep threshold (8 px/s), sleep frames (60), restitution cutoff (2.0), solver iterations (10), max substeps (8)
+All three critical issues have been fixed:
+
+1. **Wall tunneling** → Added `prev_pos` tracking and swept collision detection with full positional correction
+2. **Not all balls dropping** → Spawning now restricted to above the funnel; lowered funnel to 55% height to fit all 1000 balls
+3. **Unnatural falling** → Reduced damping (0.998→0.9995), reduced wall friction (0.3→0.03), removed progressive damping, made sleep contact-based (must be touching something AND slow for 120 frames)

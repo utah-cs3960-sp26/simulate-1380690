@@ -348,9 +348,9 @@ Always prefer correctness over performance — get it stable, then get it fast
 
 Current Issues (fix these first)
 
-1) Balls are moving through this walls, this is not allowed.
-2) Not all the balls are dropping when the program is run, the balls must fall like a realistic simulator.
-3) The balls don't fall naturally as they should.
+1) Balls vibrate at rest. This must not happen. 
+2) Performance is slow. It takes too long for all the balls to drop, and they fall slowly.
+ Make them fall smoother and more realistically.
 
 Week 9 Feature: Image Reveal via CSV Scene Description
 Goal
