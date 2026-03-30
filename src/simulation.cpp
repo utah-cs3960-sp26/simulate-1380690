@@ -184,28 +184,26 @@ void World::resolve_ball_wall(Ball& ball) {
             Vec2 n = diff.normalized();
             float penetration = ball.radius - dist;
 
-            // Positional correction
+            // Positional correction (even for sleeping balls to prevent tunneling)
             ball.pos += n * penetration;
 
             // Velocity reflection
             float vn = ball.vel.dot(n);
             if (vn < 0) {
-                // Wake sleeping ball before applying velocity response
-                if (ball.sleeping) {
+                // Only wake sleeping ball on significant incoming velocity
+                if (ball.sleeping && std::abs(vn) > 2.0f) {
                     ball.sleeping = false;
                     ball.sleep_counter = 0;
                 }
-                float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
-                ball.vel -= n * (vn * (1.0f + e));
+                if (!ball.sleeping) {
+                    float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
+                    ball.vel -= n * (vn * (1.0f + e));
+                }
             }
         } else if (dist < 1e-6f) {
             ball.pos += w.normal * ball.radius;
             float vn = ball.vel.dot(w.normal);
-            if (vn < 0) {
-                if (ball.sleeping) {
-                    ball.sleeping = false;
-                    ball.sleep_counter = 0;
-                }
+            if (vn < 0 && !ball.sleeping) {
                 float e = (std::abs(vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
                 ball.vel -= w.normal * (vn * (1.0f + e));
             }
