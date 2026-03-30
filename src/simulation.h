@@ -67,8 +67,8 @@ struct World {
     void step(float dt);
 
 private:
-    static constexpr float fixed_dt_ = 1.0f / 120.0f;
-    static constexpr int max_substeps_ = 8;
+    static constexpr float fixed_dt_ = 1.0f / 180.0f;
+    static constexpr int max_substeps_ = 12;
 
     int world_w = 0, world_h = 0;
     float accumulator_ = 0.0f;

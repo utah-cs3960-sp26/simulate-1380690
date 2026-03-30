@@ -399,17 +399,16 @@ void World::collect_pairs() {
 void World::step(float dt) {
     if (paused) return;
 
-    const float fixed_dt = 1.0f / 120.0f;
     accumulator_ += dt;
 
     // Cap accumulator to prevent spiral of death
-    float max_accum = fixed_dt * 8.0f;
+    float max_accum = fixed_dt_ * max_substeps_;
     if (accumulator_ > max_accum) accumulator_ = max_accum;
 
-    while (accumulator_ >= fixed_dt) {
-        accumulator_ -= fixed_dt;
+    while (accumulator_ >= fixed_dt_) {
+        accumulator_ -= fixed_dt_;
 
-        apply_gravity(fixed_dt);
+        apply_gravity(fixed_dt_);
 
         // Save prev positions and reset contact counts
         for (auto& b : balls) {
@@ -421,7 +420,7 @@ void World::step(float dt) {
         for (auto& b : balls) {
             if (b.sleeping) continue;
             b.vel = b.vel * DAMPING;
-            b.pos += b.vel * fixed_dt;
+            b.pos += b.vel * fixed_dt_;
         }
 
         // Build spatial hash once per substep and collect unique pairs
