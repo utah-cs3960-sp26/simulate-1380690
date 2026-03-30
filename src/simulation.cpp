@@ -306,7 +306,10 @@ void World::step(float dt) {
                 resolve_ball_wall(b);
             }
 
-            build_spatial_hash();
+            // Only rebuild spatial hash once per substep (first iteration),
+            // positions don't change much between solver iterations
+            if (iter == 0) build_spatial_hash();
+
             for (int cy = 0; cy < grid_rows_; ++cy) {
                 for (int cx = 0; cx < grid_cols_; ++cx) {
                     int cell_start = grid_starts_[cy * grid_cols_ + cx];
