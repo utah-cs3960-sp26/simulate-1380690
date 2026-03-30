@@ -225,21 +225,29 @@ void World::resolve_ball_ball(Ball& a, Ball& b) {
         // Positional correction with slop
         float slop = 0.5f;
         float correction = std::max(penetration - slop, 0.0f);
-        float total_mass = a.mass + b.mass;
-        a.pos -= n * (correction * (b.mass / total_mass));
-        b.pos += n * (correction * (a.mass / total_mass));
+        if (correction > 0.0f) {
+            float total_mass = a.mass + b.mass;
+            // If both sleeping, don't apply positional correction (stable stack)
+            if (!(a.sleeping && b.sleeping)) {
+                a.pos -= n * (correction * (b.mass / total_mass));
+                b.pos += n * (correction * (a.mass / total_mass));
+            }
+        }
 
         // Velocity response
         float rel_vn = (b.vel - a.vel).dot(n);
         if (rel_vn < 0) {
-            // Wake any sleeping ball involved in a collision with approaching velocity
-            if (a.sleeping) { a.sleeping = false; a.sleep_counter = 0; }
-            if (b.sleeping) { b.sleeping = false; b.sleep_counter = 0; }
+            // Only wake sleeping balls on significant approaching velocity
+            float wake_threshold = 2.0f;
+            if (std::abs(rel_vn) > wake_threshold) {
+                if (a.sleeping) { a.sleeping = false; a.sleep_counter = 0; }
+                if (b.sleeping) { b.sleeping = false; b.sleep_counter = 0; }
+            }
 
             float e = (std::abs(rel_vn) < RESTITUTION_CUTOFF_VEL) ? 0.0f : restitution;
             float j = -(1.0f + e) * rel_vn / (1.0f / a.mass + 1.0f / b.mass);
-            a.vel -= n * (j / a.mass);
-            b.vel += n * (j / b.mass);
+            if (!a.sleeping) a.vel -= n * (j / a.mass);
+            if (!b.sleeping) b.vel += n * (j / b.mass);
         }
     }
 }
