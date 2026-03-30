@@ -10,9 +10,9 @@ Balls must eventually come to a COMPLETE stop — no jitter, no vibration, no in
 60 fps target, 30 fps minimum
 
 Scene Layout
-Create a visually interesting container using angled wall segments:
+Create a visually simple container using angled walls.
 
-A funnel shape at the top (two angled walls forming a V) that feeds into a rectangular box at the bottom
+Two walls that funnel the walls into the box. 
 The box should be wide enough to hold all 1000 balls when settled
 Balls spawn above the funnel mouth in a grid, fall through the funnel, and pile up in the box
 
@@ -81,3 +81,7 @@ Commit Policy
 git add -A && git commit -m "message" after EVERY successful compile
 One change per commit, descriptive messages
 Never commit broken code
+
+KEY ISSUES: MUST BE FIXED
+1) The balls vibrate after they finish falling. Make the restitution amount configurable; you should see things settle down faster with less restitution, but the final "settled" state should take up the same amount of space no matter the amount of restitution.
+2) Balls cannot move through walls, this is never allowed. 
