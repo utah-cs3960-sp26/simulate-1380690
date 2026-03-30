@@ -89,3 +89,28 @@
 - Compiles cleanly with no errors
 - Runs for 5+ seconds without crashing
 - initial.csv auto-generated on default scene startup
+
+## Session 5 — Stability & Performance Improvements
+
+### Problems Fixed
+- **Vibration at rest**: Improved sleep system with progressive damping as balls approach sleep threshold, higher wake thresholds (5.0 for walls, 5.0 for ball-ball) to prevent gravity micro-collisions from waking settled balls
+- **Wall collision jitter**: Added positional correction slop (0.3px) to wall collisions, sleeping balls only have penetrating velocity zeroed without full reflection
+- **Ball-ball over-correction**: Reduced positional correction factor to 0.4 to prevent oscillation, both-sleeping pairs get only gentle correction for deep overlaps
+- **Duplicate pair resolution**: Refactored solver to collect unique collision pairs via sort+unique before iterating, preventing same pair from being resolved multiple times per iteration
+- **Rendering performance**: Batch circle rects by color with pre-reserved vector capacity
+- **Friction**: Added tangential friction (0.3) to wall collisions to help balls settle laterally
+
+### Tuning Changes
+- Sleep speed threshold: 5.0 → 8.0 px/s
+- Sleep frames required: 30 → 60
+- Velocity damping: 0.999 → 0.998
+- Restitution cutoff velocity: 1.0 → 2.0 units/s
+- Solver iterations: 8 → 10
+- Max substeps: 4 → 8
+- Ball radius range: 4-7 → 4-6 for better packing
+- Pillow installed for assign_colors.py
+
+### Tested
+- Compiles cleanly with no errors
+- Runs for 15+ seconds without crashing
+- 1000 balls generated, initial.csv auto-saved correctly
