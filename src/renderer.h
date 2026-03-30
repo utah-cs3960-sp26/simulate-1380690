@@ -15,6 +15,5 @@ public:
     int width_ = 0, height_ = 0;
 
 private:
-    void draw_thick_line(Vec2 a, Vec2 b, float thickness);
     std::vector<SDL_FRect> circle_rects_;
 };

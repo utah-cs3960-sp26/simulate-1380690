@@ -1,7 +1,6 @@
 #include "renderer.h"
 #include <cmath>
 #include <cstdio>
-#include <cstring>
 
 bool Renderer::init(int width, int height) {
     width_ = width;
@@ -34,50 +33,26 @@ void Renderer::shutdown() {
     SDL_Quit();
 }
 
-void Renderer::draw_thick_line(Vec2 a, Vec2 b, float thickness) {
-    Vec2 d = b - a;
-    float len = d.length();
-    if (len < 1e-6f) return;
-    Vec2 n = Vec2{-d.y, d.x} * (1.0f / len) * (thickness * 0.5f);
-
-    SDL_FPoint pts[4] = {
-        {a.x + n.x, a.y + n.y},
-        {a.x - n.x, a.y - n.y},
-        {b.x - n.x, b.y - n.y},
-        {b.x + n.x, b.y + n.y}
-    };
-    // Draw as two triangles
-    SDL_Vertex verts[6];
-    SDL_FColor color = {0.8f, 0.8f, 0.8f, 1.0f};
-    int indices[] = {0, 1, 2, 0, 2, 3};
-    for (int i = 0; i < 6; ++i) {
-        verts[i].position = pts[indices[i]];
-        verts[i].color = color;
-        verts[i].tex_coord = {0, 0};
-    }
-    SDL_RenderGeometry(renderer, nullptr, verts, 6, nullptr, 0);
-}
-
 void Renderer::draw(const World& world, float fps) {
     SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255);
     SDL_RenderClear(renderer);
 
-    // Draw walls
-    for (auto& w : world.walls) {
-        draw_thick_line(w.a, w.b, 3.0f);
-    }
+    // Draw container walls
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+    SDL_FRect wall_rect = {
+        world.wall_left, world.wall_top,
+        world.wall_right - world.wall_left,
+        world.wall_bottom - world.wall_top
+    };
+    SDL_RenderRect(renderer, &wall_rect);
 
-    // Draw balls — batch all scanlines into one array per draw color change
-    // Pre-reserve space to avoid reallocations
+    // Draw balls — batch rects by color
     circle_rects_.clear();
     circle_rects_.reserve(world.balls.size() * 12);
 
-    // Sort balls by color for better batching would be costly, so just
-    // batch per-ball and flush per color change
     uint8_t last_r = 0, last_g = 0, last_b = 0;
     bool first = true;
     for (auto& b : world.balls) {
-        // Flush batch on color change
         if (first || b.color_r != last_r || b.color_g != last_g || b.color_b != last_b) {
             if (!first && !circle_rects_.empty()) {
                 SDL_RenderFillRects(renderer, circle_rects_.data(), (int)circle_rects_.size());
@@ -110,13 +85,8 @@ void Renderer::draw(const World& world, float fps) {
     snprintf(buf, sizeof(buf), "Restitution: %.2f", world.restitution);
     SDL_RenderDebugText(renderer, 10, 42, buf);
 
-    int sleeping = 0;
-    for (auto& b : world.balls) if (b.sleeping) ++sleeping;
-    snprintf(buf, sizeof(buf), "Sleeping: %d", sleeping);
-    SDL_RenderDebugText(renderer, 10, 58, buf);
-
     if (world.paused) {
-        SDL_RenderDebugText(renderer, 10, 74, "PAUSED");
+        SDL_RenderDebugText(renderer, 10, 58, "PAUSED");
     }
 
     SDL_RenderPresent(renderer);

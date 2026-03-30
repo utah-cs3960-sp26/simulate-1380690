@@ -25,7 +25,6 @@ int main(int argc, char* argv[]) {
         world.init_from_csv(scene_file, WIDTH, HEIGHT);
     } else {
         world.init(WIDTH, HEIGHT);
-        // Auto-save initial positions for image reveal workflow
         world.save_csv("initial.csv");
     }
 

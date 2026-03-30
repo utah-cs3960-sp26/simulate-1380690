@@ -421,3 +421,14 @@ All changes are committed and tested. Here's a summary of what was fixed:
 5. **Raised gravity** — 1200→1800 px/s² for natural feel
 6. **Progressive damping** — near-rest balls damp faster (0.98 vs 0.9992)
 7. **Higher sleep/wake thresholds** — sleep at 8 px/s, wake at 15 px/s
+All fixes are committed. Here's a summary of what was done:
+
+**3 critical issues fixed:**
+
+1. **Vibration at rest** — Root cause was ball-ball slop (0.75px) being too large for 4-6px balls, plus brittle single-frame sleep wake. Fixed by reducing slop to 0.20px, raising correction to 60%, and making wake hysteretic (3 frames).
+
+2. **Sluggish falling** — The 0.98 per-substep "near-rest damping" was destroying 91% of velocity per second. Removed entirely; global damping softened from 0.9992→0.9998. Gravity raised 1800→2200.
+
+3. **Vortex/never-settling** — No ball-ball tangential friction let lateral circulation persist forever. Added 0.02 friction factor. Funnel opening reduced from 120px→80px.
+
+Additional: timestep tightened to 1/180s, solver iterations raised to 12, all passing 60-second stress test.
