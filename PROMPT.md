@@ -348,16 +348,9 @@ Always prefer correctness over performance — get it stable, then get it fast
 
 Current Issues (fix these first)
 
-Balls vibrate at rest — balls that should be settled keep jittering and wiggling. Implement the sleep system and restitution cutoff described above.
-Simulation runs too slow — balls move sluggishly, not at real-time speed. Fix delta time scaling.
-Animation is choppy — target 60 fps with spatial hash grid for collision detection.
-
-Performance Fixes Needed
-
-Verify fixed timestep is correct (should feel like real gravity, balls should fall fast)
-Implement or verify spatial hash grid for broad-phase collision detection
-Target 60 fps — check that the render loop is not bottlenecked
-Make sure delta time scaling is correct so physics speed matches real time
+1) Balls are moving through this walls, this is not allowed.
+2) Not all the balls are dropping when the program is run, the balls must fall like a realistic simulator.
+3) The balls don't fall naturally as they should.
 
 Week 9 Feature: Image Reveal via CSV Scene Description
 Goal

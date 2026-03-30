@@ -393,3 +393,14 @@ All changes have been pushed. Here's a summary of what was done:
 5. **Accumulator cap** — Max 8 substeps/frame prevents spiral of death
 6. **HUD** — Shows sleeping ball count
 7. **Auto-save** — `initial.csv` generated on default scene for image reveal workflow
+All changes pushed. Here's a summary of what was done this session:
+
+**Session 5 — Stability & Performance Improvements:**
+
+1. **Vibration fix**: Improved sleep system with progressive damping, higher wake thresholds (5.0 units/s), and sleeping balls only get velocity zeroed on wall contact (not fully reflected)
+2. **Wall collision slop**: Added 0.3px slop to wall positional correction to prevent over-correction oscillation
+3. **Ball-ball stability**: Reduced positional correction factor to 0.4, both-sleeping pairs only get gentle correction for deep overlaps
+4. **Friction**: Added tangential wall friction (0.3) to help lateral settling
+5. **Unique pair dedup**: Refactored solver to collect+sort+unique pairs before iteration, preventing duplicate resolutions
+6. **Renderer batching**: Circle rects batched by color with pre-reserved capacity
+7. **Tuning**: Increased sleep threshold (8 px/s), sleep frames (60), restitution cutoff (2.0), solver iterations (10), max substeps (8)
